@@ -1,0 +1,21 @@
+[project]
+name = "binary-shock"
+version = "0.1.1"
+description = "Physics-informed 3D visualization of an analytic intrabinary shock model"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+authors = [
+    { name = "Júlia Gouvêa Mamprim" },
+]
+dependencies = [
+    "ibsen @ git+https://github.com/juliagouveamamprim/IBSEn.git@abcab960350a3338086a3d0acdb3c11fc3be0723",
+    "trimesh==5.1.0",
+]
+
+[build-system]
+requires = ["setuptools<81", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = []
