@@ -1,6 +1,6 @@
 # Scientific basis and visual interpretation
 
-Binary Shock is a physics-informed visualization of the analytic intrabinary
+Binary Shock is a scientific visualization derived from the analytic intrabinary
 shock implemented by [IBSEn](https://github.com/juliagouveamamprim/IBSEn). It is
 not presented as a three-dimensional hydrodynamic or magnetohydrodynamic
 simulation.
@@ -32,5 +32,5 @@ factor and is not physical opacity. The Be decretion disk uses the orientation
 and flaring prescription in the model, but has a finite display cutoff chosen
 for composition.
 
-Exact values for every generated asset are written next to the GLB in its
+Exact values for every generated scene are written next to the GLB in its
 `*.metadata.json` sidecar.

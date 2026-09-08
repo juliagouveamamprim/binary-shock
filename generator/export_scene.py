@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Export a physics-informed Binary Shock scene from IBSEn to GLB.
+"""Export a scientific Binary Shock scene from IBSEn to GLB.
 
-The generated asset is intended as a first visual test in Sketchfab. Positions
+The generated scene is intended for the Binary Shock browser viewer. Positions
 are expressed in units of the instantaneous star--pulsar separation. The shock
-surface and its Doppler field come from IBSEn; the display radii and materials
-are explicitly documented as visual choices in the metadata sidecar.
+surface and its Doppler field come from IBSEn; display radii, materials, and
+explanatory layers are explicitly documented as visual choices in the metadata
+file.
 """
 
 from __future__ import annotations
@@ -150,6 +151,90 @@ def _set_material(mesh: trimesh.Trimesh, material: trimesh.visual.material.PBRMa
     mesh.visual = trimesh.visual.TextureVisuals(uv=None, material=material)
 
 
+def _flared_disk_mesh(
+    *,
+    inner_radius: float,
+    outer_radius: float,
+    star_radius: float,
+    delta: float,
+    height_exp: float,
+    normal: np.ndarray,
+    n_radial: int = 64,
+    n_azimuth: int = 192,
+) -> trimesh.Trimesh:
+    """Build the two flared faces of the display-scale decretion disk."""
+    radii = np.geomspace(inner_radius, outer_radius, n_radial)
+    angles = np.linspace(0.0, 2.0 * np.pi, n_azimuth, endpoint=False)
+    rr, aa = np.meshgrid(radii, angles)
+    half_height = delta * rr * np.power(rr / star_radius, height_exp)
+
+    local_faces = []
+    for sign in (1.0, -1.0):
+        local_faces.append(
+            np.stack(
+                (
+                    rr * np.cos(aa),
+                    rr * np.sin(aa),
+                    sign * half_height,
+                ),
+                axis=-1,
+            ).reshape(-1, 3)
+        )
+    vertices = np.concatenate(local_faces, axis=0)
+
+    faces: list[tuple[int, int, int]] = []
+    points_per_side = n_azimuth * n_radial
+    for side in range(2):
+        offset = side * points_per_side
+        for phi_index in range(n_azimuth):
+            next_phi = (phi_index + 1) % n_azimuth
+            for radial_index in range(n_radial - 1):
+                a = offset + phi_index * n_radial + radial_index
+                b = offset + next_phi * n_radial + radial_index
+                c = b + 1
+                d = a + 1
+                if side == 0:
+                    faces.extend(((a, b, d), (b, c, d)))
+                else:
+                    faces.extend(((a, d, b), (b, d, c)))
+
+    # The analytic pressure profile does not define a hard rendered edge. Fade
+    # the final 35% of the chosen display radius so the cutoff is visibly a
+    # presentation choice rather than a physical boundary.
+    fade_coordinate = np.clip(
+        (radii / outer_radius - 0.65) / 0.35,
+        0.0,
+        1.0,
+    )
+    smooth_fade = fade_coordinate**2 * (3.0 - 2.0 * fade_coordinate)
+    radial_alpha = np.rint(195.0 * (1.0 - smooth_fade)).astype(np.uint8)
+    alpha = np.tile(radial_alpha, n_azimuth)
+    alpha = np.concatenate((alpha, alpha))
+    rgba = np.empty((len(vertices), 4), dtype=np.uint8)
+    rgba[:, :3] = np.array([255, 80, 30], dtype=np.uint8)
+    rgba[:, 3] = alpha
+
+    material = _pbr_material(
+        "Be decretion disk — flared visual cutoff",
+        (255, 91, 32, 210),
+        (0.72, 0.055, 0.012),
+        roughness=0.76,
+        alpha_mode="BLEND",
+        double_sided=True,
+    )
+    visual = trimesh.visual.TextureVisuals(uv=None, material=material)
+    visual.vertex_attributes = {"color": rgba}
+    mesh = trimesh.Trimesh(
+        vertices=vertices,
+        faces=np.asarray(faces, dtype=np.int64),
+        visual=visual,
+        process=False,
+    )
+    align_disk = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], normal)
+    mesh.apply_transform(align_disk)
+    return mesh
+
+
 def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
     separation = data.separation_cm
     star_radius = float(data.star.R_s / separation)
@@ -165,7 +250,7 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
     )
     shock_visual = trimesh.visual.TextureVisuals(uv=None, material=shock_material)
     # Trimesh exports this attribute as glTF COLOR_0 while retaining the PBR
-    # material, so Sketchfab receives both the scalar map and transparency.
+    # material, so compatible viewers receive the scalar map and transparency.
     shock_visual.vertex_attributes = {"color": data.shock_rgba.reshape(-1, 4)}
     shock_mesh = trimesh.Trimesh(
         vertices=data.shock_vertices,
@@ -241,24 +326,13 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
         * disk_outer_radius
         * np.power(disk_outer_radius / star_radius, data.star.height_exp)
     )
-    disk_mesh = trimesh.creation.annulus(
-        r_min=disk_inner_radius,
-        r_max=disk_outer_radius,
-        height=2.0 * disk_half_height,
-        sections=192,
-    )
-    align_disk = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], data.star.n_disk)
-    disk_mesh.apply_transform(align_disk)
-    _set_material(
-        disk_mesh,
-        _pbr_material(
-            "Be decretion disk — visual cutoff",
-            (245, 72, 24, 102),
-            (0.72, 0.055, 0.012),
-            roughness=0.76,
-            alpha_mode="BLEND",
-            double_sided=True,
-        ),
+    disk_mesh = _flared_disk_mesh(
+        inner_radius=disk_inner_radius,
+        outer_radius=disk_outer_radius,
+        star_radius=star_radius,
+        delta=float(data.star.delta),
+        height_exp=float(data.star.height_exp),
+        normal=np.asarray(data.star.n_disk, dtype=float),
     )
 
     scene = trimesh.Scene(base_frame="Binary Shock")
@@ -306,8 +380,8 @@ def build_metadata(
     doppler = data.doppler[np.isfinite(data.doppler)]
     return {
         "title": "Binary Shock — PSR B1259−63 prototype",
-        "asset_version": "0.1.1",
-        "classification": "Physics-informed visualization of an analytic axisymmetric model",
+        "scene_version": "0.1.1",
+        "classification": "Scientific visualization derived from an analytic axisymmetric model",
         "physical_model": {
             "software": "IBSEn",
             "repository": "https://github.com/juliagouveamamprim/IBSEn",
@@ -323,6 +397,35 @@ def build_metadata(
             "shock_arclength_cutoff_s_max": s_max,
             "coordinate_origin": "Be star center",
             "coordinate_unit": "instantaneous star-pulsar separation",
+            "scene_positions": {
+                "be_star": [0.0, 0.0, 0.0],
+                "pulsar": (
+                    np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float)
+                    / data.separation_cm
+                ).tolist(),
+            },
+            "flow_model": {
+                "stellar_polar_wind": {
+                    "geometry": "isotropic radial flow",
+                    "constant_velocity_cm_s": float(data.star.v_polar_wind),
+                    "pressure_normalization_f_w": float(data.star.f_w),
+                    "pressure_radial_power_law_index": 2.0,
+                },
+                "pulsar_wind": {
+                    "geometry": "isotropic radial flow",
+                    "pressure_normalization_f_p": float(data.pulsar.f_p),
+                    "pressure_radial_power_law_index": 2.0,
+                },
+                "decretion_disk": {
+                    "normal_scene_coordinates": np.asarray(
+                        data.star.n_disk, dtype=float
+                    ).tolist(),
+                    "velocity_model": "Keplerian rotation in the disk plane",
+                    "pressure_radial_power_law_index": float(data.star.np_disk),
+                    "scale_height_ratio_at_stellar_surface": float(data.star.delta),
+                    "scale_height_exponent": float(data.star.height_exp),
+                },
+            },
         },
         "shock_surface": {
             "vertices": int(len(data.shock_vertices)),
@@ -339,16 +442,17 @@ def build_metadata(
         "visual_interpretation": {
             **display,
             "shock_alpha": "Display mapping derived from normalized Doppler factor; not physical opacity",
-            "emission_and_halos": "Artistic cues for visibility; Sketchfab bloom is not baked into the asset",
+            "emission_and_halos": "Artistic cues for visibility; browser glow is not baked into the GLB",
             "pulsar_scale": "Strongly enlarged; a physical neutron-star radius is unresolved at this scale",
-            "disk_extent": "Finite visual cutoff; the analytic pressure prescription has no rendered hard edge",
+            "disk_geometry": "Flared with the IBSEn scale-height law",
+            "disk_extent": "Finite visual cutoff with a smooth opacity fade over the outer 35 percent",
             "turbulence": "None added; the exported shock retains the axisymmetric IBSEn geometry",
         },
     }
 
 
 def render_preview(data: SceneData, output: Path) -> None:
-    """Render a lightweight QA preview; Sketchfab remains the target renderer."""
+    """Render a lightweight QA preview for inspecting the exported geometry."""
     grid = data.shock_vertices.reshape(data.shock.n_phi, data.shock.n, 3)
     rgba = data.shock_rgba.astype(float) / 255.0
     star_radius = float(data.star.R_s / data.separation_cm)
@@ -381,7 +485,7 @@ def render_preview(data: SceneData, output: Path) -> None:
     pz = pulsar_position[2] + pulsar_radius * np.outer(np.ones_like(u), np.cos(v))
     ax.plot_surface(px, py, pz, color="#bfe9ff", linewidth=0, shade=True)
 
-    # Draw the disk midplane using an orthonormal basis perpendicular to n_disk.
+    # Draw the two flared disk faces using the same scale-height law as the GLB.
     normal = np.asarray(data.star.n_disk, dtype=float)
     helper = np.array([0.0, 0.0, 1.0])
     if abs(float(np.dot(normal, helper))) > 0.92:
@@ -389,16 +493,35 @@ def render_preview(data: SceneData, output: Path) -> None:
     basis_u = np.cross(normal, helper)
     basis_u /= np.linalg.norm(basis_u)
     basis_v = np.cross(normal, basis_u)
-    radii = np.linspace(star_radius * 1.22, 0.52, 34)
+    radii = np.geomspace(star_radius * 1.22, 0.52, 48)
     angles = np.linspace(0.0, 2.0 * np.pi, 128)
     rr, aa = np.meshgrid(radii, angles)
-    disk = (
+    disk_midplane = (
         rr[..., None] * np.cos(aa)[..., None] * basis_u
         + rr[..., None] * np.sin(aa)[..., None] * basis_v
     )
-    ax.plot_surface(
-        disk[..., 0], disk[..., 1], disk[..., 2], color="#d83a18", alpha=0.26, linewidth=0
+    disk_height = (
+        data.star.delta
+        * rr
+        * np.power(rr / star_radius, data.star.height_exp)
     )
+    fade_coordinate = np.clip((rr / 0.52 - 0.65) / 0.35, 0.0, 1.0)
+    disk_alpha = 0.31 * (
+        1.0 - fade_coordinate**2 * (3.0 - 2.0 * fade_coordinate)
+    )
+    disk_rgba = np.zeros((*rr.shape, 4), dtype=float)
+    disk_rgba[..., :3] = matplotlib.colors.to_rgb("#d83a18")
+    disk_rgba[..., 3] = disk_alpha
+    for sign in (1.0, -1.0):
+        disk = disk_midplane + sign * disk_height[..., None] * normal
+        ax.plot_surface(
+            disk[..., 0],
+            disk[..., 1],
+            disk[..., 2],
+            facecolors=disk_rgba,
+            linewidth=0,
+            shade=False,
+        )
 
     mins = data.shock_vertices.min(axis=0)
     maxs = data.shock_vertices.max(axis=0)

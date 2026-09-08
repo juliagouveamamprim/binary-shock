@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'none'"
+  >
+  <title>Binary Shock — Interactive Scene</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <main id="binary-shock-viewer">
+    <canvas id="scene-canvas" aria-label="Interactive three-dimensional view of the Binary Shock scene"></canvas>
+
+    <header class="viewer-header">
+      <div>
+        <p class="eyebrow">PSR B1259−63 · ANALYTIC MODEL</p>
+        <h1>Binary Shock</h1>
+      </div>
+      <div class="status" id="load-status" role="status">
+        <span class="status-light" aria-hidden="true"></span>
+        <span>Loading GLB and metadata…</span>
+      </div>
+    </header>
+
+    <aside class="control-panel" aria-label="Scene controls">
+      <section>
+        <p class="section-label">View</p>
+        <div class="view-buttons">
+          <button type="button" data-view="system" class="is-active">System</button>
+          <button type="button" data-view="star">Be star</button>
+          <button type="button" data-view="pulsar">Pulsar</button>
+          <button type="button" data-view="shock">Shock</button>
+        </div>
+      </section>
+
+      <section>
+        <p class="section-label">Layers</p>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="shock" checked>
+          <span class="swatch swatch-shock"></span>
+          <span>Analytic shock</span>
+          <small>MODEL</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="disk" checked>
+          <span class="swatch swatch-disk"></span>
+          <span>Decretion disk</span>
+          <small>MODEL + DISPLAY</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="stellarWind" checked>
+          <span class="swatch swatch-star-wind"></span>
+          <span>Stellar wind</span>
+          <small>EXPLANATORY</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="pulsarWind" checked>
+          <span class="swatch swatch-pulsar-wind"></span>
+          <span>Pulsar wind</span>
+          <small>EXPLANATORY</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="diskGas" checked>
+          <span class="swatch swatch-disk-gas"></span>
+          <span>Disk flow</span>
+          <small>EXPLANATORY</small>
+        </label>
+      </section>
+
+      <section class="metadata-panel">
+        <p class="section-label">Loaded from JSON</p>
+        <dl>
+          <div><dt>Epoch</dt><dd id="meta-epoch">—</dd></div>
+          <div><dt>Separation</dt><dd id="meta-separation">—</dd></div>
+          <div><dt>Wind ratio β</dt><dd id="meta-beta">—</dd></div>
+          <div><dt>Doppler range</dt><dd id="meta-doppler">—</dd></div>
+        </dl>
+      </section>
+
+      <p class="interpretation-note">
+        Moving points visualize IBSEn flow directions and scaling laws.
+        They are not simulated particles.
+      </p>
+    </aside>
+
+    <div class="object-label" id="star-label">Be star</div>
+    <div class="object-label" id="pulsar-label">Pulsar</div>
+
+    <footer class="viewer-footer">
+      <span>Drag to orbit · scroll or pinch to zoom</span>
+      <span>Doppler factor <i class="gradient-key" aria-hidden="true"></i></span>
+    </footer>
+
+    <div class="error-panel" id="error-panel" hidden>
+      <strong>The scientific scene could not be loaded.</strong>
+      <span id="error-message"></span>
+      <span>Start a web server from the repository root and open <code>/viewer/</code>.</span>
+    </div>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

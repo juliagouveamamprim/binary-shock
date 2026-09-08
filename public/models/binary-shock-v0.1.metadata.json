@@ -1,7 +1,7 @@
 {
   "title": "Binary Shock — PSR B1259−63 prototype",
-  "asset_version": "0.1.1",
-  "classification": "Physics-informed visualization of an analytic axisymmetric model",
+  "scene_version": "0.1.1",
+  "classification": "Scientific visualization derived from an analytic axisymmetric model",
   "physical_model": {
     "software": "IBSEn",
     "repository": "https://github.com/juliagouveamamprim/IBSEn",
@@ -16,7 +16,43 @@
     "disk_pressure_strength_f_d": 100.0,
     "shock_arclength_cutoff_s_max": 2.0,
     "coordinate_origin": "Be star center",
-    "coordinate_unit": "instantaneous star-pulsar separation"
+    "coordinate_unit": "instantaneous star-pulsar separation",
+    "scene_positions": {
+      "be_star": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "pulsar": [
+        -0.11166281590690387,
+        0.99374615246739,
+        0.0
+      ]
+    },
+    "flow_model": {
+      "stellar_polar_wind": {
+        "geometry": "isotropic radial flow",
+        "constant_velocity_cm_s": 300000000.0,
+        "pressure_normalization_f_w": 1.0,
+        "pressure_radial_power_law_index": 2.0
+      },
+      "pulsar_wind": {
+        "geometry": "isotropic radial flow",
+        "pressure_normalization_f_p": 0.1,
+        "pressure_radial_power_law_index": 2.0
+      },
+      "decretion_disk": {
+        "normal_scene_coordinates": [
+          0.49999999999999994,
+          0.0,
+          0.8660254037844387
+        ],
+        "velocity_model": "Keplerian rotation in the disk plane",
+        "pressure_radial_power_law_index": 3.0,
+        "scale_height_ratio_at_stellar_surface": 0.01,
+        "scale_height_exponent": 0.5
+      }
+    }
   },
   "shock_surface": {
     "vertices": 19360,
@@ -38,9 +74,10 @@
     "disk_outer_radius_separation_units": 0.52,
     "disk_half_height_at_outer_edge_separation_units": 0.024226824184939242,
     "shock_alpha": "Display mapping derived from normalized Doppler factor; not physical opacity",
-    "emission_and_halos": "Artistic cues for visibility; Sketchfab bloom is not baked into the asset",
+    "emission_and_halos": "Artistic cues for visibility; browser glow is not baked into the GLB",
     "pulsar_scale": "Strongly enlarged; a physical neutron-star radius is unresolved at this scale",
-    "disk_extent": "Finite visual cutoff; the analytic pressure prescription has no rendered hard edge",
+    "disk_geometry": "Flared with the IBSEn scale-height law",
+    "disk_extent": "Finite visual cutoff with a smooth opacity fade over the outer 35 percent",
     "turbulence": "None added; the exported shock retains the axisymmetric IBSEn geometry"
   }
 }
