@@ -8,6 +8,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = PROJECT_ROOT / "public/models/binary-shock-v0.1.glb"
 METADATA_PATH = PROJECT_ROOT / "public/models/binary-shock-v0.1.metadata.json"
+PULSAR_TEXTURE_PATH = PROJECT_ROOT / "public/textures/neutron-star-thermal-v0.3.png"
 VIEWER_PATH = PROJECT_ROOT / "viewer"
 
 
@@ -16,10 +17,14 @@ class ViewerContractTests(unittest.TestCase):
         source = (VIEWER_PATH / "app.js").read_text(encoding="utf-8")
         self.assertIn("../public/models/binary-shock-v0.1.glb", source)
         self.assertIn("../public/models/binary-shock-v0.1.metadata.json", source)
+        self.assertIn("../public/textures/neutron-star-thermal-v0.3.png", source)
         self.assertIn("createRadialPressureGlow", source)
         self.assertIn("createDiskPressureVolume", source)
+        self.assertIn("createTexturedPulsar", source)
         self.assertTrue(MODEL_PATH.is_file())
         self.assertGreater(MODEL_PATH.stat().st_size, 0)
+        self.assertTrue(PULSAR_TEXTURE_PATH.is_file())
+        self.assertGreater(PULSAR_TEXTURE_PATH.stat().st_size, 0)
 
     def test_metadata_supplies_flow_model(self) -> None:
         metadata = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
@@ -53,6 +58,10 @@ class ViewerContractTests(unittest.TestCase):
         self.assertEqual(len(orbit["barycenter_scene_coordinates"]), 3)
         self.assertEqual(orbit["current_be_star_scene_coordinates"], [0.0, 0.0, 0.0])
         self.assertEqual(len(orbit["current_pulsar_scene_coordinates"]), 3)
+        interpretation = metadata["visual_interpretation"]
+        self.assertIn("no extended stellar or pulsar halo", interpretation["body_lighting"])
+        self.assertIn("compact, smoothly fading white glow", interpretation["body_lighting"])
+        self.assertIn("not an observed surface map", interpretation["pulsar_surface_texture"])
         disk = flows["decretion_disk"]
         self.assertLess(
             abs(disk["pulsar_height_from_disk_plane_separation_units"]),

@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const MODEL_URL = "../public/models/binary-shock-v0.1.glb";
 const METADATA_URL = "../public/models/binary-shock-v0.1.metadata.json";
+const PULSAR_TEXTURE_URL = "../public/textures/neutron-star-thermal-v0.3.png";
 
 const canvas = document.getElementById("scene-canvas");
 const statusElement = document.getElementById("load-status");
@@ -112,21 +113,6 @@ function makePressureTexture() {
 
 const pressureTexture = makePressureTexture();
 
-function makeGlow(position, color, size, opacity) {
-  const material = new THREE.SpriteMaterial({
-    map: pointTexture,
-    color,
-    transparent: true,
-    opacity,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const sprite = new THREE.Sprite(material);
-  sprite.position.copy(position);
-  sprite.scale.setScalar(size);
-  return sprite;
-}
-
 function addBackgroundStars() {
   const random = seededRandom(7341);
   const count = 1300;
@@ -179,16 +165,46 @@ function prepareModel(root) {
         material.depthWrite = false;
         material.side = THREE.DoubleSide;
         material.vertexColors = true;
-      } else if (name.includes("halo") || name.includes("atmosphere")) {
-        material.transparent = true;
-        material.depthWrite = false;
-        material.blending = THREE.AdditiveBlending;
       }
       material.needsUpdate = true;
       return material;
     });
     object.material = sourceWasArray ? preparedMaterials : preparedMaterials[0];
   });
+}
+
+function createTexturedPulsar(position, radius, texture) {
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+
+  const material = new THREE.MeshBasicMaterial({
+    map: texture,
+    color: new THREE.Color().setRGB(1.07, 1.07, 1.07),
+    toneMapped: false,
+  });
+  const geometry = new THREE.SphereGeometry(radius, 128, 64);
+  const sphere = new THREE.Mesh(geometry, material);
+  sphere.name = "Pulsar textured surface — visual";
+
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: pointTexture,
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.28,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  }));
+  glow.name = "Pulsar compact glow — visual";
+  glow.scale.setScalar(radius * 3.2);
+
+  const group = new THREE.Group();
+  group.name = "Pulsar browser surface";
+  group.position.copy(position);
+  group.add(glow, sphere);
+  return group;
 }
 
 function createRadialFlow(options) {
@@ -571,15 +587,13 @@ function updateDiskFlow(points, deltaSeconds) {
 }
 
 function addSystemLighting(starPosition, pulsarPosition) {
-  const starLight = new THREE.PointLight(0xff8c42, 5.5, 5.0, 1.6);
+  const starLight = new THREE.PointLight(0xffa15e, 2.2, 3.4, 1.8);
   starLight.position.copy(starPosition);
   scene.add(starLight);
-  scene.add(makeGlow(starPosition, 0xff7a27, 0.28, 0.9));
 
-  const pulsarLight = new THREE.PointLight(0x62c9ff, 4.2, 2.8, 1.5);
+  const pulsarLight = new THREE.PointLight(0x83d9ff, 1.5, 1.8, 2.0);
   pulsarLight.position.copy(pulsarPosition);
   scene.add(pulsarLight);
-  scene.add(makeGlow(pulsarPosition, 0x4dbdff, 0.24, 0.94));
 }
 
 function applyMetadata(metadata) {
@@ -606,8 +620,8 @@ function setCameraView(name, targets) {
       target: targets.star,
     },
     pulsar: {
-      position: targets.pulsar.clone().add(new THREE.Vector3(0.62, -0.58, 0.46)),
-      target: targets.pulsar,
+      position: targets.pulsar.clone().add(new THREE.Vector3(0.18, -0.17, 0.13)),
+      target: targets.pulsar.clone().add(new THREE.Vector3(0, 0, -0.045)),
     },
     shock: {
       position: new THREE.Vector3(2.8, 0.1, 1.55),
@@ -675,9 +689,11 @@ async function loadScene() {
     return response.json();
   });
   const modelPromise = new GLTFLoader().loadAsync(MODEL_URL);
-  const results = await Promise.all([metadataPromise, modelPromise]);
+  const texturePromise = new THREE.TextureLoader().loadAsync(PULSAR_TEXTURE_URL);
+  const results = await Promise.all([metadataPromise, modelPromise, texturePromise]);
   const metadata = results[0];
   const model = results[1].scene;
+  const pulsarTexture = results[2];
   prepareModel(model);
   scene.add(model);
   applyMetadata(metadata);
@@ -691,6 +707,20 @@ async function loadScene() {
   const diskNormal = new THREE.Vector3().fromArray(
     flowModel.decretion_disk.normal_scene_coordinates,
   ).normalize();
+
+  const glbPulsar = findObject(model, function isPulsarBody(object) {
+    return object.isMesh && object.name.toLowerCase() === "pulsar";
+  });
+  if (!glbPulsar) {
+    throw new Error("The display-scale pulsar object was not found in the GLB.");
+  }
+  glbPulsar.visible = false;
+  const pulsarSurface = createTexturedPulsar(
+    pulsarPosition,
+    display.pulsar_display_radius_separation_units,
+    pulsarTexture,
+  );
+  scene.add(pulsarSurface);
 
   const orbitDisplay = physical.orbit_display;
   const starOrbit = createOrbitPath(
@@ -862,7 +892,7 @@ async function loadScene() {
   };
   bindControls(targets);
   setCameraView("system", targets);
-  setStatus("GLB + JSON loaded", "ready");
+  setStatus("GLB + JSON + texture loaded", "ready");
 }
 
 addBackgroundStars();

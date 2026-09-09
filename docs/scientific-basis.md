@@ -26,8 +26,13 @@ that the Be-star center remains the documented origin of every exported scene.
 ## Deliberate visual choices
 
 The neutron star is enlarged because its physical radius is unresolvable on the
-binary scale. Transparent stellar and pulsar halos are visibility cues, not
-physical boundaries. Shock transparency is mapped from the normalized Doppler
+binary scale. Its original equirectangular surface texture is an artistic proxy
+for subtle thermal-emissivity variation, including a few sparse cool spots; it
+is neither an observed neutron-star surface map nor an IBSEn output. The bodies
+have no extended halo meshes or large
+glow sprites. A compact, smoothly fading white glow remains immediately around
+the pulsar surface; it and the low-intensity point lights are visibility cues,
+not physical fields. Shock transparency is mapped from the normalized Doppler
 factor and is not physical opacity.
 
 The browser distinguishes static pressure fields from moving flow tracers. The

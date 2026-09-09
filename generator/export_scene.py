@@ -191,19 +191,6 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
         ),
     )
 
-    star_halo = trimesh.creation.icosphere(subdivisions=3, radius=star_radius * 1.22)
-    _set_material(
-        star_halo,
-        _pbr_material(
-            "Be star atmosphere — visual",
-            (255, 126, 45, 42),
-            (0.62, 0.12, 0.02),
-            roughness=1.0,
-            alpha_mode="BLEND",
-            double_sided=True,
-        ),
-    )
-
     # A neutron star is far below the resolvable scale of this scene. This is
     # deliberately enlarged and recorded in the metadata sidecar.
     pulsar_display_radius = 0.026
@@ -216,22 +203,6 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
             (205, 235, 255, 255),
             (0.28, 0.68, 1.0),
             roughness=0.22,
-        ),
-    )
-
-    pulsar_halo = trimesh.creation.icosphere(
-        subdivisions=3, radius=pulsar_display_radius * 2.25
-    )
-    pulsar_halo.apply_translation(pulsar_position)
-    _set_material(
-        pulsar_halo,
-        _pbr_material(
-            "Pulsar halo — visual",
-            (68, 172, 255, 30),
-            (0.05, 0.22, 0.80),
-            roughness=1.0,
-            alpha_mode="BLEND",
-            double_sided=True,
         ),
     )
 
@@ -258,9 +229,7 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
     scene = trimesh.Scene(base_frame="Binary Shock")
     scene.add_geometry(shock_mesh, geom_name="IBS shock surface", node_name="IBS shock surface")
     scene.add_geometry(star_mesh, geom_name="Be star", node_name="Be star")
-    scene.add_geometry(star_halo, geom_name="Be star atmosphere", node_name="Be star atmosphere")
     scene.add_geometry(pulsar_mesh, geom_name="Pulsar", node_name="Pulsar")
-    scene.add_geometry(pulsar_halo, geom_name="Pulsar halo", node_name="Pulsar halo")
 
     display = {
         "star_radius_separation_units": star_radius,
@@ -315,7 +284,7 @@ def build_metadata(
     barycenter_scene = -star_barycentric_now / data.separation_cm
     return {
         "title": "Binary Shock — PSR B1259−63 prototype",
-        "scene_version": "0.1.2",
+        "scene_version": "0.1.3",
         "classification": "Scientific visualization derived from an analytic axisymmetric model",
         "physical_model": {
             "software": "IBSEn",
@@ -414,8 +383,17 @@ def build_metadata(
         "visual_interpretation": {
             **display,
             "shock_alpha": "Display mapping derived from normalized Doppler factor; not physical opacity",
-            "emission_and_halos": "Artistic cues for visibility; browser glow is not baked into the GLB",
+            "body_lighting": (
+                "Low-intensity browser point lights are artistic visibility cues; "
+                "no extended stellar or pulsar halo is exported; the browser adds "
+                "only a compact, smoothly fading white glow around the pulsar surface"
+            ),
             "pulsar_scale": "Strongly enlarged; a physical neutron-star radius is unresolved at this scale",
+            "pulsar_surface_texture": (
+                "Original artistic thermal-emissivity texture with subtle cool mottling "
+                "and a few sparse low-emissivity spots; not an observed surface map or "
+                "an IBSEn output"
+            ),
             "star_orbit": (
                 "Model-derived barycentric path; its translation keeps the current Be star "
                 "at the scene origin and does not alter its shape or scale"

@@ -17,7 +17,8 @@ IBSEn (Python) -> GLB + scientific metadata -> Three.js viewer
 The GLB contains the analytic shock surface, Be star, and a display-scale
 pulsar. A JSON file records the wind and disk pressure laws, flow parameters,
 field ranges, units, and deliberate visual choices. Three.js uses those values
-to reconstruct diffuse pressure fields and explanatory flow tracers.
+to reconstruct diffuse pressure fields and explanatory flow tracers, and wraps
+an original thermal-emissivity texture around the browser-rendered pulsar.
 
 ## Explore the interactive scene
 
@@ -49,6 +50,7 @@ Outputs:
 - `public/models/binary-shock-v0.1.glb`
 - `public/models/binary-shock-v0.1.metadata.json`
 - `public/previews/binary-shock-v0.1.png`
+- `public/textures/neutron-star-thermal-v0.3.png`
 
 
 ## Scientific scope
