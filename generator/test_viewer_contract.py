@@ -40,6 +40,19 @@ class ViewerContractTests(unittest.TestCase):
         )
         self.assertEqual(len(flows["decretion_disk"]["normal_scene_coordinates"]), 3)
         self.assertEqual(len(physical["scene_positions"]["pulsar"]), 3)
+        orbit = physical["orbit_display"]
+        self.assertEqual(
+            orbit["source"],
+            "IBSEn Orbit.vector_s and Orbit.vector_p",
+        )
+        self.assertEqual(orbit["bodies"], ["Be star", "pulsar"])
+        self.assertEqual(orbit["samples"], 361)
+        self.assertLess(orbit["be_star_barycentric_fraction"], 0.1)
+        self.assertEqual(len(orbit["be_star_path_scene_coordinates"]), 361)
+        self.assertEqual(len(orbit["pulsar_path_scene_coordinates"]), 361)
+        self.assertEqual(len(orbit["barycenter_scene_coordinates"]), 3)
+        self.assertEqual(orbit["current_be_star_scene_coordinates"], [0.0, 0.0, 0.0])
+        self.assertEqual(len(orbit["current_pulsar_scene_coordinates"]), 3)
         disk = flows["decretion_disk"]
         self.assertLess(
             abs(disk["pulsar_height_from_disk_plane_separation_units"]),

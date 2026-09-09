@@ -300,9 +300,22 @@ def build_metadata(
     ibsen_root: Path,
 ) -> dict:
     doppler = data.doppler[np.isfinite(data.doppler)]
+    orbit_times = np.linspace(-0.5 * data.orbit.T, 0.5 * data.orbit.T, 361)
+    star_barycentric_now = np.asarray(
+        data.orbit.vector_s(data.time_seconds), dtype=float
+    )
+    star_orbit_scene = (
+        np.asarray(data.orbit.vector_s(orbit_times), dtype=float).T
+        - star_barycentric_now
+    ) / data.separation_cm
+    pulsar_orbit_scene = (
+        np.asarray(data.orbit.vector_p(orbit_times), dtype=float).T
+        - star_barycentric_now
+    ) / data.separation_cm
+    barycenter_scene = -star_barycentric_now / data.separation_cm
     return {
         "title": "Binary Shock — PSR B1259−63 prototype",
-        "scene_version": "0.1.1",
+        "scene_version": "0.1.2",
         "classification": "Scientific visualization derived from an analytic axisymmetric model",
         "physical_model": {
             "software": "IBSEn",
@@ -322,6 +335,30 @@ def build_metadata(
             "scene_positions": {
                 "be_star": [0.0, 0.0, 0.0],
                 "pulsar": (
+                    np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float)
+                    / data.separation_cm
+                ).tolist(),
+            },
+            "orbit_display": {
+                "source": "IBSEn Orbit.vector_s and Orbit.vector_p",
+                "bodies": ["Be star", "pulsar"],
+                "period_days": float(data.orbit.T / DAY_SECONDS),
+                "eccentricity": float(data.orbit.e),
+                "be_star_mass_g": float(data.orbit.M_s),
+                "pulsar_mass_g": float(data.orbit.M_p),
+                "be_star_barycentric_fraction": float(
+                    data.orbit.M_p / data.orbit.M
+                ),
+                "samples": int(len(star_orbit_scene)),
+                "coordinate_frame": (
+                    "Barycentric orbit translated by the current Be-star position "
+                    "and scaled by the instantaneous star-pulsar separation"
+                ),
+                "be_star_path_scene_coordinates": star_orbit_scene.tolist(),
+                "pulsar_path_scene_coordinates": pulsar_orbit_scene.tolist(),
+                "barycenter_scene_coordinates": barycenter_scene.tolist(),
+                "current_be_star_scene_coordinates": [0.0, 0.0, 0.0],
+                "current_pulsar_scene_coordinates": (
                     np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float)
                     / data.separation_cm
                 ).tolist(),
@@ -379,6 +416,14 @@ def build_metadata(
             "shock_alpha": "Display mapping derived from normalized Doppler factor; not physical opacity",
             "emission_and_halos": "Artistic cues for visibility; browser glow is not baked into the GLB",
             "pulsar_scale": "Strongly enlarged; a physical neutron-star radius is unresolved at this scale",
+            "star_orbit": (
+                "Model-derived barycentric path; its translation keeps the current Be star "
+                "at the scene origin and does not alter its shape or scale"
+            ),
+            "pulsar_orbit": (
+                "Model-derived barycentric path shown in the same translated coordinate "
+                "frame and physical scale as the Be-star orbit"
+            ),
             "pressure_fields": (
                 "Smooth browser volumes use the IBSEn pressure laws with contrast compression; "
                 "both winds share one monotonic brightness mapping and spatial display window; "
@@ -430,6 +475,20 @@ def render_preview(data: SceneData, output: Path) -> None:
     py = pulsar_position[1] + pulsar_radius * np.outer(np.sin(u), np.sin(v))
     pz = pulsar_position[2] + pulsar_radius * np.outer(np.ones_like(u), np.cos(v))
     ax.plot_surface(px, py, pz, color="#bfe9ff", linewidth=0, shade=True)
+
+    orbit_times = np.linspace(-0.5 * data.orbit.T, 0.5 * data.orbit.T, 361)
+    star_now_barycentric = np.asarray(data.orbit.vector_s(data.time_seconds))
+    star_orbit = (
+        np.asarray(data.orbit.vector_s(orbit_times)).T - star_now_barycentric
+    ) / data.separation_cm
+    ax.plot(
+        star_orbit[:, 0],
+        star_orbit[:, 1],
+        star_orbit[:, 2],
+        color="#ff9d58",
+        linewidth=1.0,
+        alpha=0.72,
+    )
 
     # Draw a diffuse gaseous volume rather than a pair of disk boundary faces.
     # Its scale height and pressure weighting follow the IBSEn laws; the random

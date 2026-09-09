@@ -50,5 +50,12 @@ disk plane and fades it smoothly. At the selected epoch the pulsar lies within
 one model scale height of the disk midplane, so the overlap is physically
 meaningful even though its visual strength is deliberately enhanced.
 
+The optional stellar and pulsar orbits are sampled directly from
+`IBSEn Orbit.vector_s` and `Orbit.vector_p`, their barycentric Keplerian
+positions. Because the frozen scene uses the current Be-star center as its
+origin, both complete orbits and the barycenter are translated by the star's
+current barycentric position. This changes only the coordinate origin: their
+model-derived shapes, shared focus, and physical scales are preserved.
+
 Exact values for every generated scene are written next to the GLB in its
 `*.metadata.json` sidecar.

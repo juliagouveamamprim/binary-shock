@@ -434,6 +434,51 @@ function createDiskPressureVolume(options) {
   return group;
 }
 
+function createOrbitPath(pathCoordinates, options) {
+  const points = pathCoordinates.map(function toVector(point) {
+    return new THREE.Vector3().fromArray(point);
+  });
+  // The metadata closes the orbit by repeating the first point. TubeGeometry
+  // closes the curve itself, so omit that duplicate when constructing it.
+  const curvePoints = points.slice(0, -1);
+  const curve = new THREE.CatmullRomCurve3(curvePoints, true, "centripetal");
+  const group = new THREE.Group();
+
+  const glowGeometry = new THREE.TubeGeometry(
+    curve,
+    512,
+    options.glowRadius,
+    6,
+    true,
+  );
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: options.glowColor,
+    transparent: true,
+    opacity: 0.16,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  group.add(new THREE.Mesh(glowGeometry, glowMaterial));
+
+  const coreGeometry = new THREE.TubeGeometry(
+    curve,
+    512,
+    options.coreRadius,
+    6,
+    true,
+  );
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color: options.coreColor,
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  group.add(new THREE.Mesh(coreGeometry, coreMaterial));
+  group.visible = false;
+  return group;
+}
+
 function createDiskFlow(options) {
   const random = seededRandom(options.seed);
   const positions = new Float32Array(options.count * 3);
@@ -568,6 +613,14 @@ function setCameraView(name, targets) {
       position: new THREE.Vector3(2.8, 0.1, 1.55),
       target: targets.shock,
     },
+    orbits: {
+      position: targets.orbits.center.clone().add(new THREE.Vector3(
+        0,
+        -targets.orbits.radius * 1.15,
+        targets.orbits.radius * 2.9,
+      )),
+      target: targets.orbits.center,
+    },
   };
   const view = views[name] || views.system;
   camera.position.copy(view.position);
@@ -638,6 +691,39 @@ async function loadScene() {
   const diskNormal = new THREE.Vector3().fromArray(
     flowModel.decretion_disk.normal_scene_coordinates,
   ).normalize();
+
+  const orbitDisplay = physical.orbit_display;
+  const starOrbit = createOrbitPath(
+    orbitDisplay.be_star_path_scene_coordinates,
+    {
+      glowColor: 0xff6e32,
+      coreColor: 0xffb06f,
+      glowRadius: 0.009,
+      coreRadius: 0.0032,
+    },
+  );
+  scene.add(starOrbit);
+  layerObjects.starOrbit = starOrbit;
+
+  const pulsarOrbit = createOrbitPath(
+    orbitDisplay.pulsar_path_scene_coordinates,
+    {
+      glowColor: 0x167fbd,
+      coreColor: 0x72dcff,
+      glowRadius: 0.012,
+      coreRadius: 0.004,
+    },
+  );
+  scene.add(pulsarOrbit);
+  layerObjects.pulsarOrbit = pulsarOrbit;
+
+  const orbitPoints = orbitDisplay.be_star_path_scene_coordinates
+    .concat(orbitDisplay.pulsar_path_scene_coordinates)
+    .map(function toOrbitVector(point) {
+      return new THREE.Vector3().fromArray(point);
+    });
+  const orbitSphere = new THREE.Sphere();
+  new THREE.Box3().setFromPoints(orbitPoints).getBoundingSphere(orbitSphere);
 
   const shockObject = findObject(model, function isShock(object) {
     return object.name.toLowerCase().includes("shock");
@@ -769,6 +855,10 @@ async function loadScene() {
     star: starPosition,
     pulsar: pulsarPosition,
     shock: shockCenter,
+    orbits: {
+      center: orbitSphere.center,
+      radius: orbitSphere.radius,
+    },
   };
   bindControls(targets);
   setCameraView("system", targets);

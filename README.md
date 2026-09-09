@@ -31,7 +31,8 @@ Then open `http://localhost:8000/viewer/`. The viewer loads the generated GLB
 and JSON files and adds two separate kinds of layers: static pressure-field
 volumes and moving flow tracers. Their geometry and scaling laws come from the
 model, but the visible points are a display sampling rather than simulation
-particles.
+particles. Optional orbital-context layers show the IBSEn barycentric orbits of
+the Be star and pulsar.
 
 ## Reproduce the prototype scene
 
