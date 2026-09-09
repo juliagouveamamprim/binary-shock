@@ -93,6 +93,25 @@ function makePointTexture() {
 
 const pointTexture = makePointTexture();
 
+function makePressureTexture() {
+  const textureCanvas = document.createElement("canvas");
+  textureCanvas.width = 256;
+  textureCanvas.height = 256;
+  const context = textureCanvas.getContext("2d");
+  const gradient = context.createRadialGradient(128, 128, 3, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(255,255,255,.95)");
+  gradient.addColorStop(0.08, "rgba(255,255,255,.82)");
+  gradient.addColorStop(0.26, "rgba(255,255,255,.42)");
+  gradient.addColorStop(0.58, "rgba(255,255,255,.13)");
+  gradient.addColorStop(0.82, "rgba(255,255,255,.035)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(textureCanvas);
+}
+
+const pressureTexture = makePressureTexture();
+
 function makeGlow(position, color, size, opacity) {
   const material = new THREE.SpriteMaterial({
     map: pointTexture,
@@ -262,6 +281,46 @@ function clipFlowAtShock(points, shockRoot) {
   }
 }
 
+function smoothstep(edge0, edge1, value) {
+  const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+function createRadialPressureGlow(options) {
+  const group = new THREE.Group();
+  group.position.copy(options.origin);
+  const layers = [
+    { radius: options.maxRadius, sampleRadius: options.maxRadius * 0.72, weight: 0.64 },
+    { radius: options.maxRadius * 0.58, sampleRadius: options.maxRadius * 0.40, weight: 0.84 },
+    { radius: options.maxRadius * 0.27, sampleRadius: options.maxRadius * 0.18, weight: 1.0 },
+  ];
+  layers.forEach(function addLayer(layer) {
+    const pressure = options.pressureNormalization * Math.pow(
+      options.referenceRadius / layer.sampleRadius,
+      options.pressureIndex,
+    );
+    // The same monotonic transfer function is used for both winds. It
+    // compresses their large dynamic range but preserves their ordering.
+    const pressureLight = Math.pow(
+      THREE.MathUtils.clamp(pressure / options.displayPressureMax, 1e-10, 1),
+      0.1,
+    );
+    const material = new THREE.SpriteMaterial({
+      map: pressureTexture,
+      color: options.color,
+      transparent: true,
+      opacity: options.opacity * layer.weight * pressureLight,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: true,
+    });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.setScalar(layer.radius * 2);
+    group.add(sprite);
+  });
+  return group;
+}
+
 function sampleDiskRadius(random, innerRadius, outerRadius, pressureIndex) {
   const areaWeightedExponent = 1 - pressureIndex;
   const integralExponent = areaWeightedExponent + 1;
@@ -274,6 +333,107 @@ function sampleDiskRadius(random, innerRadius, outerRadius, pressureIndex) {
   return Math.pow(low + sample * (high - low), 1 / integralExponent);
 }
 
+function gaussianRandom(random) {
+  const u = Math.max(random(), 1e-7);
+  const v = random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function diskBasis(normal) {
+  const normalized = normal.clone().normalize();
+  const helper = Math.abs(normalized.z) > 0.92
+    ? new THREE.Vector3(1, 0, 0)
+    : new THREE.Vector3(0, 0, 1);
+  const basisU = new THREE.Vector3().crossVectors(normalized, helper).normalize();
+  const basisV = new THREE.Vector3().crossVectors(normalized, basisU).normalize();
+  return { normal: normalized, basisU, basisV };
+}
+
+function createDiskPressureVolume(options) {
+  const group = new THREE.Group();
+  group.position.copy(options.origin);
+  group.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    options.normal.clone().normalize(),
+  );
+  const halfHeight = options.scaleHeightRatio
+    * options.outerRadius
+    * Math.pow(options.outerRadius / options.starRadius, options.scaleHeightExponent);
+  const extent = halfHeight * 2.8;
+  const geometry = new THREE.PlaneGeometry(
+    options.outerRadius * 2,
+    options.outerRadius * 2,
+  );
+  const vertexShader = `
+    varying vec2 vDiskPosition;
+    void main() {
+      vDiskPosition = position.xy;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+  const fragmentShader = `
+    uniform vec3 uColor;
+    uniform float uInnerRadius;
+    uniform float uOuterRadius;
+    uniform float uStarRadius;
+    uniform float uScaleHeightRatio;
+    uniform float uScaleHeightExponent;
+    uniform float uPressureIndex;
+    uniform float uPressureNormalization;
+    uniform float uDisplayPressureMax;
+    uniform float uSliceHeight;
+    uniform float uSliceOpacity;
+    varying vec2 vDiskPosition;
+
+    void main() {
+      float radius = length(vDiskPosition);
+      if (radius < uInnerRadius || radius > uOuterRadius) discard;
+      float scaleHeight = uScaleHeightRatio * radius
+        * pow(radius / uStarRadius, uScaleHeightExponent);
+      float vertical = exp(-0.5 * pow(uSliceHeight / scaleHeight, 2.0));
+      float pressure = uPressureNormalization
+        * pow(uStarRadius / radius, uPressureIndex) * vertical;
+      float normalizedPressure = clamp(pressure / uDisplayPressureMax, 1e-10, 1.0);
+      float pressureLight = 0.14 + 0.86 * pow(normalizedPressure, 0.12);
+      float innerFade = smoothstep(uInnerRadius, uInnerRadius * 1.16, radius);
+      float edgeFade = 1.0 - smoothstep(uOuterRadius * 0.70, uOuterRadius, radius);
+      float alpha = uSliceOpacity * innerFade * edgeFade * pow(vertical, 0.56);
+      gl_FragColor = vec4(uColor * pressureLight, alpha);
+    }
+  `;
+
+  for (let index = 0; index < options.slices; index += 1) {
+    const fraction = options.slices === 1 ? 0.5 : index / (options.slices - 1);
+    const height = THREE.MathUtils.lerp(-extent, extent, fraction);
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(options.color) },
+        uInnerRadius: { value: options.innerRadius },
+        uOuterRadius: { value: options.outerRadius },
+        uStarRadius: { value: options.starRadius },
+        uScaleHeightRatio: { value: options.scaleHeightRatio },
+        uScaleHeightExponent: { value: options.scaleHeightExponent },
+        uPressureIndex: { value: options.pressureIndex },
+        uPressureNormalization: { value: options.pressureNormalization },
+        uDisplayPressureMax: { value: options.displayPressureMax },
+        uSliceHeight: { value: height },
+        uSliceOpacity: { value: options.opacity },
+      },
+      vertexShader,
+      fragmentShader,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const slice = new THREE.Mesh(geometry, material);
+    slice.position.z = height;
+    slice.frustumCulled = false;
+    group.add(slice);
+  }
+  return group;
+}
+
 function createDiskFlow(options) {
   const random = seededRandom(options.seed);
   const positions = new Float32Array(options.count * 3);
@@ -281,12 +441,10 @@ function createDiskFlow(options) {
   const radii = new Float32Array(options.count);
   const angles = new Float32Array(options.count);
   const heights = new Float32Array(options.count);
-  const normal = options.normal.clone().normalize();
-  const helper = Math.abs(normal.z) > 0.92
-    ? new THREE.Vector3(1, 0, 0)
-    : new THREE.Vector3(0, 0, 1);
-  const basisU = new THREE.Vector3().crossVectors(normal, helper).normalize();
-  const basisV = new THREE.Vector3().crossVectors(normal, basisU).normalize();
+  const basis = diskBasis(options.normal);
+  const normal = basis.normal;
+  const basisU = basis.basisU;
+  const basisV = basis.basisV;
   const inner = Math.max(options.innerRadius, options.starRadius * 1.3);
 
   for (let index = 0; index < options.count; index += 1) {
@@ -294,15 +452,17 @@ function createDiskFlow(options) {
       random,
       inner,
       options.outerRadius,
-      options.pressureIndex,
+      Math.max(1.0, options.pressureIndex * 0.5),
     );
     const scaleHeight = options.scaleHeightRatio
       * radius
       * Math.pow(radius / options.starRadius, options.scaleHeightExponent);
     radii[index] = radius;
     angles[index] = random() * Math.PI * 2;
-    heights[index] = (random() * 2 - 1) * scaleHeight;
-    const heat = 0.45 + 0.55 * (1 - radius / options.outerRadius);
+    heights[index] = THREE.MathUtils.clamp(gaussianRandom(random), -1.8, 1.8)
+      * scaleHeight;
+    const edgeFade = 1 - smoothstep(0.76, 1, radius / options.outerRadius);
+    const heat = (0.45 + 0.55 * (1 - radius / options.outerRadius)) * edgeFade;
     colors[index * 3] = 1.0 * heat;
     colors[index * 3 + 1] = 0.18 + 0.18 * heat;
     colors[index * 3 + 2] = 0.055;
@@ -482,16 +642,77 @@ async function loadScene() {
   const shockObject = findObject(model, function isShock(object) {
     return object.name.toLowerCase().includes("shock");
   });
-  const diskObject = findObject(model, function isDisk(object) {
-    return object.name.toLowerCase().includes("decretion");
-  });
-  if (!shockObject || !diskObject) {
-    throw new Error("Expected shock and disk objects were not found in the GLB.");
+  if (!shockObject) {
+    throw new Error("The analytic shock object was not found in the GLB.");
   }
 
   layerObjects.shock = shockObject;
-  layerObjects.disk = diskObject;
   const shockCenter = new THREE.Box3().setFromObject(shockObject).getCenter(new THREE.Vector3());
+  const starWind = flowModel.stellar_polar_wind;
+  const pulsarWindModel = flowModel.pulsar_wind;
+  const diskModel = flowModel.decretion_disk;
+  const starReferenceRadius = starWind.pressure_reference_radius_cm
+    / physical.separation_cm;
+  const pulsarReferenceRadius = pulsarWindModel.pressure_reference_radius_cm
+    / physical.separation_cm;
+  const starFieldInner = display.star_radius_separation_units * 1.3;
+  const pulsarFieldInner = display.pulsar_display_radius_separation_units * 1.22;
+  const pressureDisplayMax = Math.max(
+    starWind.pressure_normalization_f_w * Math.pow(
+      starReferenceRadius / starFieldInner,
+      starWind.pressure_radial_power_law_index,
+    ),
+    pulsarWindModel.pressure_normalization_f_p * Math.pow(
+      pulsarReferenceRadius / pulsarFieldInner,
+      pulsarWindModel.pressure_radial_power_law_index,
+    ),
+  );
+  const windDisplayRadius = Math.max(1.55, display.disk_outer_radius_separation_units);
+
+  const stellarPressure = createRadialPressureGlow({
+    origin: starPosition,
+    maxRadius: windDisplayRadius,
+    pressureIndex: starWind.pressure_radial_power_law_index,
+    pressureNormalization: starWind.pressure_normalization_f_w,
+    referenceRadius: starReferenceRadius,
+    displayPressureMax: pressureDisplayMax,
+    opacity: 0.68,
+    color: 0xff9845,
+  });
+  scene.add(stellarPressure);
+  layerObjects.stellarPressure = stellarPressure;
+
+  const pulsarPressure = createRadialPressureGlow({
+    origin: pulsarPosition,
+    maxRadius: windDisplayRadius,
+    pressureIndex: pulsarWindModel.pressure_radial_power_law_index,
+    pressureNormalization: pulsarWindModel.pressure_normalization_f_p,
+    referenceRadius: pulsarReferenceRadius,
+    displayPressureMax: pressureDisplayMax,
+    opacity: 0.68,
+    color: 0x55cfff,
+  });
+  scene.add(pulsarPressure);
+  layerObjects.pulsarPressure = pulsarPressure;
+
+  const diskPressure = createDiskPressureVolume({
+    origin: starPosition,
+    normal: diskNormal,
+    innerRadius: display.disk_inner_radius_separation_units,
+    outerRadius: display.disk_outer_radius_separation_units,
+    starRadius: display.star_radius_separation_units,
+    pressureIndex: diskModel.pressure_radial_power_law_index,
+    pressureNormalization: diskModel.pressure_normalization_f_d,
+    referenceRadius: display.star_radius_separation_units,
+    displayPressureMax: pressureDisplayMax,
+    scaleHeightRatio: diskModel.scale_height_ratio_at_stellar_surface,
+    scaleHeightExponent: diskModel.scale_height_exponent,
+    slices: 46,
+    opacity: 0.028,
+    color: 0xff4a28,
+  });
+  scene.add(diskPressure);
+  layerObjects.diskPressure = diskPressure;
 
   const stellarWind = createRadialFlow({
     seed: 12041,
@@ -525,7 +746,7 @@ async function loadScene() {
 
   const diskGas = createDiskFlow({
     seed: 9931,
-    count: 680,
+    count: 820,
     origin: starPosition,
     normal: diskNormal,
     innerRadius: display.disk_inner_radius_separation_units,

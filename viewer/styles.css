@@ -198,7 +198,9 @@ h1 {
 }
 
 .swatch-shock { color: #c86cff; background: currentColor; }
-.swatch-disk { color: #ff573d; background: currentColor; }
+.swatch-star-pressure { color: #d98032; background: currentColor; }
+.swatch-disk-pressure { color: #ff4f32; background: currentColor; }
+.swatch-pulsar-pressure { color: #2b77b5; background: currentColor; }
 .swatch-star-wind { color: #ffb45f; background: currentColor; }
 .swatch-pulsar-wind { color: #61d4ff; background: currentColor; }
 .swatch-disk-gas { color: #ff7456; background: currentColor; }

@@ -34,7 +34,7 @@ class ExportSceneTests(unittest.TestCase):
             path.write_bytes(blob)
             loaded = trimesh.load(path, force="scene")
 
-        self.assertEqual(len(loaded.geometry), 6)
+        self.assertEqual(len(loaded.geometry), 5)
         self.assertTrue(np.isfinite(data.shock_vertices).all())
         self.assertTrue(np.isfinite(data.doppler).all())
         self.assertEqual(len(data.shock_rgba.reshape(-1, 4)), len(data.shock_vertices))

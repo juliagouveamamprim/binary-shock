@@ -14,10 +14,10 @@ does not claim to be a 3D hydrodynamic simulation.
 IBSEn (Python) -> GLB + scientific metadata -> Three.js viewer
 ```
 
-The GLB contains the analytic shock surface, Be star, decretion disk, and a
-display-scale pulsar. The winds determine the shock geometry in the IBSEn model
-but are not exported as simulated particles. A JSON file records physical
-parameters, field ranges, units, and deliberate visual choices.
+The GLB contains the analytic shock surface, Be star, and a display-scale
+pulsar. A JSON file records the wind and disk pressure laws, flow parameters,
+field ranges, units, and deliberate visual choices. Three.js uses those values
+to reconstruct diffuse pressure fields and explanatory flow tracers.
 
 ## Explore the interactive scene
 
@@ -28,8 +28,10 @@ python3 -m http.server 8000
 ```
 
 Then open `http://localhost:8000/viewer/`. The viewer loads the generated GLB
-and JSON files and adds explanatory wind and disk-flow particles. Those
-particles follow model-defined flow directions but are not simulation output.
+and JSON files and adds two separate kinds of layers: static pressure-field
+volumes and moving flow tracers. Their geometry and scaling laws come from the
+model, but the visible points are a display sampling rather than simulation
+particles.
 
 ## Reproduce the prototype scene
 

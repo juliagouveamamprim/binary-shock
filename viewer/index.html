@@ -45,36 +45,56 @@
       </section>
 
       <section>
-        <p class="section-label">Layers</p>
+        <p class="section-label">Model geometry</p>
         <label class="layer-toggle">
           <input type="checkbox" data-layer="shock" checked>
           <span class="swatch swatch-shock"></span>
           <span>Analytic shock</span>
           <small>MODEL</small>
         </label>
+      </section>
+
+      <section>
+        <p class="section-label">Pressure fields</p>
         <label class="layer-toggle">
-          <input type="checkbox" data-layer="disk" checked>
-          <span class="swatch swatch-disk"></span>
-          <span>Decretion disk</span>
-          <small>MODEL + DISPLAY</small>
+          <input type="checkbox" data-layer="stellarPressure" checked>
+          <span class="swatch swatch-star-pressure"></span>
+          <span>Stellar wind pressure</span>
+          <small>MODEL FIELD</small>
         </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="diskPressure" checked>
+          <span class="swatch swatch-disk-pressure"></span>
+          <span>Decretion disk pressure</span>
+          <small>MODEL FIELD</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="pulsarPressure" checked>
+          <span class="swatch swatch-pulsar-pressure"></span>
+          <span>Pulsar wind pressure</span>
+          <small>MODEL FIELD</small>
+        </label>
+      </section>
+
+      <section>
+        <p class="section-label">Flow tracers</p>
         <label class="layer-toggle">
           <input type="checkbox" data-layer="stellarWind" checked>
           <span class="swatch swatch-star-wind"></span>
-          <span>Stellar wind</span>
-          <small>EXPLANATORY</small>
-        </label>
-        <label class="layer-toggle">
-          <input type="checkbox" data-layer="pulsarWind" checked>
-          <span class="swatch swatch-pulsar-wind"></span>
-          <span>Pulsar wind</span>
-          <small>EXPLANATORY</small>
+          <span>Stellar radial flow</span>
+          <small>MODEL FLOW</small>
         </label>
         <label class="layer-toggle">
           <input type="checkbox" data-layer="diskGas" checked>
           <span class="swatch swatch-disk-gas"></span>
-          <span>Disk flow</span>
-          <small>EXPLANATORY</small>
+          <span>Keplerian disk flow</span>
+          <small>MODEL FLOW</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="pulsarWind" checked>
+          <span class="swatch swatch-pulsar-wind"></span>
+          <span>Pulsar radial flow</span>
+          <small>MODEL FLOW</small>
         </label>
       </section>
 
@@ -89,8 +109,8 @@
       </section>
 
       <p class="interpretation-note">
-        Moving points visualize IBSEn flow directions and scaling laws.
-        They are not simulated particles.
+        Wind volumes share one contrast-compressed pressure scale; moving points
+        show flow directions. They are model visualizations, not simulated particles.
       </p>
     </aside>
 

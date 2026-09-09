@@ -151,90 +151,6 @@ def _set_material(mesh: trimesh.Trimesh, material: trimesh.visual.material.PBRMa
     mesh.visual = trimesh.visual.TextureVisuals(uv=None, material=material)
 
 
-def _flared_disk_mesh(
-    *,
-    inner_radius: float,
-    outer_radius: float,
-    star_radius: float,
-    delta: float,
-    height_exp: float,
-    normal: np.ndarray,
-    n_radial: int = 64,
-    n_azimuth: int = 192,
-) -> trimesh.Trimesh:
-    """Build the two flared faces of the display-scale decretion disk."""
-    radii = np.geomspace(inner_radius, outer_radius, n_radial)
-    angles = np.linspace(0.0, 2.0 * np.pi, n_azimuth, endpoint=False)
-    rr, aa = np.meshgrid(radii, angles)
-    half_height = delta * rr * np.power(rr / star_radius, height_exp)
-
-    local_faces = []
-    for sign in (1.0, -1.0):
-        local_faces.append(
-            np.stack(
-                (
-                    rr * np.cos(aa),
-                    rr * np.sin(aa),
-                    sign * half_height,
-                ),
-                axis=-1,
-            ).reshape(-1, 3)
-        )
-    vertices = np.concatenate(local_faces, axis=0)
-
-    faces: list[tuple[int, int, int]] = []
-    points_per_side = n_azimuth * n_radial
-    for side in range(2):
-        offset = side * points_per_side
-        for phi_index in range(n_azimuth):
-            next_phi = (phi_index + 1) % n_azimuth
-            for radial_index in range(n_radial - 1):
-                a = offset + phi_index * n_radial + radial_index
-                b = offset + next_phi * n_radial + radial_index
-                c = b + 1
-                d = a + 1
-                if side == 0:
-                    faces.extend(((a, b, d), (b, c, d)))
-                else:
-                    faces.extend(((a, d, b), (b, d, c)))
-
-    # The analytic pressure profile does not define a hard rendered edge. Fade
-    # the final 35% of the chosen display radius so the cutoff is visibly a
-    # presentation choice rather than a physical boundary.
-    fade_coordinate = np.clip(
-        (radii / outer_radius - 0.65) / 0.35,
-        0.0,
-        1.0,
-    )
-    smooth_fade = fade_coordinate**2 * (3.0 - 2.0 * fade_coordinate)
-    radial_alpha = np.rint(195.0 * (1.0 - smooth_fade)).astype(np.uint8)
-    alpha = np.tile(radial_alpha, n_azimuth)
-    alpha = np.concatenate((alpha, alpha))
-    rgba = np.empty((len(vertices), 4), dtype=np.uint8)
-    rgba[:, :3] = np.array([255, 80, 30], dtype=np.uint8)
-    rgba[:, 3] = alpha
-
-    material = _pbr_material(
-        "Be decretion disk — flared visual cutoff",
-        (255, 91, 32, 210),
-        (0.72, 0.055, 0.012),
-        roughness=0.76,
-        alpha_mode="BLEND",
-        double_sided=True,
-    )
-    visual = trimesh.visual.TextureVisuals(uv=None, material=material)
-    visual.vertex_attributes = {"color": rgba}
-    mesh = trimesh.Trimesh(
-        vertices=vertices,
-        faces=np.asarray(faces, dtype=np.int64),
-        visual=visual,
-        process=False,
-    )
-    align_disk = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], normal)
-    mesh.apply_transform(align_disk)
-    return mesh
-
-
 def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
     separation = data.separation_cm
     star_radius = float(data.star.R_s / separation)
@@ -320,19 +236,23 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
     )
 
     disk_inner_radius = star_radius * 1.22
-    disk_outer_radius = 0.52
+    disk_normal = np.asarray(data.star.n_disk, dtype=float)
+    pulsar_height = float(np.dot(pulsar_position, disk_normal))
+    pulsar_in_plane = pulsar_position - pulsar_height * disk_normal
+    pulsar_in_plane_radius = float(np.linalg.norm(pulsar_in_plane))
+    # IBSEn does not prescribe a hard disk edge. Extend the display volume
+    # beyond the pulsar's projected disk-plane radius, then fade it smoothly in
+    # the browser. This connects the rendered disk to the interaction region.
+    disk_outer_radius = max(0.52, 1.35 * pulsar_in_plane_radius)
     disk_half_height = float(
         data.star.delta
         * disk_outer_radius
         * np.power(disk_outer_radius / star_radius, data.star.height_exp)
     )
-    disk_mesh = _flared_disk_mesh(
-        inner_radius=disk_inner_radius,
-        outer_radius=disk_outer_radius,
-        star_radius=star_radius,
-        delta=float(data.star.delta),
-        height_exp=float(data.star.height_exp),
-        normal=np.asarray(data.star.n_disk, dtype=float),
+    disk_height_at_pulsar_radius = float(
+        data.star.delta
+        * pulsar_in_plane_radius
+        * np.power(pulsar_in_plane_radius / star_radius, data.star.height_exp)
     )
 
     scene = trimesh.Scene(base_frame="Binary Shock")
@@ -341,7 +261,6 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
     scene.add_geometry(star_halo, geom_name="Be star atmosphere", node_name="Be star atmosphere")
     scene.add_geometry(pulsar_mesh, geom_name="Pulsar", node_name="Pulsar")
     scene.add_geometry(pulsar_halo, geom_name="Pulsar halo", node_name="Pulsar halo")
-    scene.add_geometry(disk_mesh, geom_name="Be decretion disk", node_name="Be decretion disk")
 
     display = {
         "star_radius_separation_units": star_radius,
@@ -349,6 +268,9 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
         "disk_inner_radius_separation_units": disk_inner_radius,
         "disk_outer_radius_separation_units": disk_outer_radius,
         "disk_half_height_at_outer_edge_separation_units": disk_half_height,
+        "pulsar_height_from_disk_plane_separation_units": pulsar_height,
+        "pulsar_radius_in_disk_plane_separation_units": pulsar_in_plane_radius,
+        "disk_half_height_at_pulsar_radius_separation_units": disk_height_at_pulsar_radius,
     }
     return scene, display
 
@@ -409,11 +331,13 @@ def build_metadata(
                     "geometry": "isotropic radial flow",
                     "constant_velocity_cm_s": float(data.star.v_polar_wind),
                     "pressure_normalization_f_w": float(data.star.f_w),
+                    "pressure_reference_radius_cm": float(data.star.R_s),
                     "pressure_radial_power_law_index": 2.0,
                 },
                 "pulsar_wind": {
                     "geometry": "isotropic radial flow",
                     "pressure_normalization_f_p": float(data.pulsar.f_p),
+                    "pressure_reference_radius_cm": float(data.pulsar.r_p_ref),
                     "pressure_radial_power_law_index": 2.0,
                 },
                 "decretion_disk": {
@@ -421,9 +345,20 @@ def build_metadata(
                         data.star.n_disk, dtype=float
                     ).tolist(),
                     "velocity_model": "Keplerian rotation in the disk plane",
+                    "pressure_normalization_f_d": float(data.star.f_d),
                     "pressure_radial_power_law_index": float(data.star.np_disk),
                     "scale_height_ratio_at_stellar_surface": float(data.star.delta),
                     "scale_height_exponent": float(data.star.height_exp),
+                    "vertical_pressure_profile": str(data.star.vert_prof),
+                    "pulsar_height_from_disk_plane_separation_units": display[
+                        "pulsar_height_from_disk_plane_separation_units"
+                    ],
+                    "pulsar_radius_in_disk_plane_separation_units": display[
+                        "pulsar_radius_in_disk_plane_separation_units"
+                    ],
+                    "scale_height_at_pulsar_radius_separation_units": display[
+                        "disk_half_height_at_pulsar_radius_separation_units"
+                    ],
                 },
             },
         },
@@ -444,8 +379,19 @@ def build_metadata(
             "shock_alpha": "Display mapping derived from normalized Doppler factor; not physical opacity",
             "emission_and_halos": "Artistic cues for visibility; browser glow is not baked into the GLB",
             "pulsar_scale": "Strongly enlarged; a physical neutron-star radius is unresolved at this scale",
-            "disk_geometry": "Flared with the IBSEn scale-height law",
-            "disk_extent": "Finite visual cutoff with a smooth opacity fade over the outer 35 percent",
+            "pressure_fields": (
+                "Smooth browser volumes use the IBSEn pressure laws with contrast compression; "
+                "both winds share one monotonic brightness mapping and spatial display window; "
+                "brightness and opacity are display mappings, not gas density or physical opacity"
+            ),
+            "disk_geometry": (
+                "Diffuse browser volume sampled from the IBSEn radial pressure and vertical "
+                "scale-height laws; no hard disk surface is stored in the GLB"
+            ),
+            "disk_extent": (
+                "IBSEn supplies no hard outer edge; the display radius is 1.35 times the "
+                "pulsar's projected disk-plane radius and fades smoothly at the edge"
+            ),
             "turbulence": "None added; the exported shock retains the axisymmetric IBSEn geometry",
         },
     }
@@ -485,7 +431,9 @@ def render_preview(data: SceneData, output: Path) -> None:
     pz = pulsar_position[2] + pulsar_radius * np.outer(np.ones_like(u), np.cos(v))
     ax.plot_surface(px, py, pz, color="#bfe9ff", linewidth=0, shade=True)
 
-    # Draw the two flared disk faces using the same scale-height law as the GLB.
+    # Draw a diffuse gaseous volume rather than a pair of disk boundary faces.
+    # Its scale height and pressure weighting follow the IBSEn laws; the random
+    # points are only a display sampling of that continuous analytic field.
     normal = np.asarray(data.star.n_disk, dtype=float)
     helper = np.array([0.0, 0.0, 1.0])
     if abs(float(np.dot(normal, helper))) > 0.92:
@@ -493,35 +441,52 @@ def render_preview(data: SceneData, output: Path) -> None:
     basis_u = np.cross(normal, helper)
     basis_u /= np.linalg.norm(basis_u)
     basis_v = np.cross(normal, basis_u)
-    radii = np.geomspace(star_radius * 1.22, 0.52, 48)
-    angles = np.linspace(0.0, 2.0 * np.pi, 128)
-    rr, aa = np.meshgrid(radii, angles)
-    disk_midplane = (
-        rr[..., None] * np.cos(aa)[..., None] * basis_u
-        + rr[..., None] * np.sin(aa)[..., None] * basis_v
+    pulsar_height = float(np.dot(pulsar_position, normal))
+    pulsar_plane_radius = float(
+        np.linalg.norm(pulsar_position - pulsar_height * normal)
     )
-    disk_height = (
+    disk_outer_radius = max(0.52, 1.35 * pulsar_plane_radius)
+    disk_inner_radius = star_radius * 1.22
+    random = np.random.default_rng(9137)
+    sample_count = 12_000
+    # A logarithmic draw is a contrast-compressed display choice: it preserves
+    # the low-pressure outer disk without pretending that point density is gas
+    # density.
+    radii = disk_inner_radius * np.power(
+        disk_outer_radius / disk_inner_radius, random.random(sample_count)
+    )
+    angles = random.uniform(0.0, 2.0 * np.pi, sample_count)
+    scale_height = (
         data.star.delta
-        * rr
-        * np.power(rr / star_radius, data.star.height_exp)
+        * radii
+        * np.power(radii / star_radius, data.star.height_exp)
     )
-    fade_coordinate = np.clip((rr / 0.52 - 0.65) / 0.35, 0.0, 1.0)
-    disk_alpha = 0.31 * (
-        1.0 - fade_coordinate**2 * (3.0 - 2.0 * fade_coordinate)
+    heights = np.clip(random.normal(size=sample_count), -2.8, 2.8) * scale_height
+    disk_points = (
+        radii[:, None] * np.cos(angles)[:, None] * basis_u
+        + radii[:, None] * np.sin(angles)[:, None] * basis_v
+        + heights[:, None] * normal
     )
-    disk_rgba = np.zeros((*rr.shape, 4), dtype=float)
-    disk_rgba[..., :3] = matplotlib.colors.to_rgb("#d83a18")
-    disk_rgba[..., 3] = disk_alpha
-    for sign in (1.0, -1.0):
-        disk = disk_midplane + sign * disk_height[..., None] * normal
-        ax.plot_surface(
-            disk[..., 0],
-            disk[..., 1],
-            disk[..., 2],
-            facecolors=disk_rgba,
-            linewidth=0,
-            shade=False,
-        )
+    edge_start = 0.72 * disk_outer_radius
+    edge_t = np.clip(
+        (radii - edge_start) / (disk_outer_radius - edge_start), 0.0, 1.0
+    )
+    edge_fade = 1.0 - edge_t**2 * (3.0 - 2.0 * edge_t)
+    pressure = np.power(disk_inner_radius / radii, data.star.np_disk)
+    pressure *= np.exp(-0.5 * np.square(heights / scale_height))
+    brightness = np.power(pressure, 0.16) * edge_fade
+    disk_rgba = np.zeros((sample_count, 4), dtype=float)
+    disk_rgba[:, :3] = matplotlib.colors.to_rgb("#e84420")
+    disk_rgba[:, 3] = 0.015 + 0.14 * brightness
+    ax.scatter(
+        disk_points[:, 0],
+        disk_points[:, 1],
+        disk_points[:, 2],
+        s=1.1,
+        c=disk_rgba,
+        linewidths=0,
+        depthshade=False,
+    )
 
     mins = data.shock_vertices.min(axis=0)
     maxs = data.shock_vertices.max(axis=0)

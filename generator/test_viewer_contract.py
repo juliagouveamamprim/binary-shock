@@ -16,6 +16,8 @@ class ViewerContractTests(unittest.TestCase):
         source = (VIEWER_PATH / "app.js").read_text(encoding="utf-8")
         self.assertIn("../public/models/binary-shock-v0.1.glb", source)
         self.assertIn("../public/models/binary-shock-v0.1.metadata.json", source)
+        self.assertIn("createRadialPressureGlow", source)
+        self.assertIn("createDiskPressureVolume", source)
         self.assertTrue(MODEL_PATH.is_file())
         self.assertGreater(MODEL_PATH.stat().st_size, 0)
 
@@ -38,6 +40,11 @@ class ViewerContractTests(unittest.TestCase):
         )
         self.assertEqual(len(flows["decretion_disk"]["normal_scene_coordinates"]), 3)
         self.assertEqual(len(physical["scene_positions"]["pulsar"]), 3)
+        disk = flows["decretion_disk"]
+        self.assertLess(
+            abs(disk["pulsar_height_from_disk_plane_separation_units"]),
+            disk["scale_height_at_pulsar_radius_separation_units"],
+        )
 
 
 if __name__ == "__main__":
