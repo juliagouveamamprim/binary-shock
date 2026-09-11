@@ -7,7 +7,12 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from export_scene import _grid_faces, build_glb_scene, calculate_scene
+from export_scene import (
+    _grid_faces,
+    _model_informed_pulsar_axes,
+    build_glb_scene,
+    calculate_scene,
+)
 
 
 class ExportSceneTests(unittest.TestCase):
@@ -40,6 +45,32 @@ class ExportSceneTests(unittest.TestCase):
         self.assertTrue(np.isfinite(data.shock_vertices).all())
         self.assertTrue(np.isfinite(data.doppler).all())
         self.assertEqual(len(data.shock_rgba.reshape(-1, 4)), len(data.shock_vertices))
+
+    def test_model_informed_pulsar_axes_preserve_published_angles(self) -> None:
+        data, _ = calculate_scene(n_theta=25, n_phi=32, s_max=1.0)
+        axes = _model_informed_pulsar_axes(data.shock.unit_los)
+
+        for axis in axes.values():
+            self.assertAlmostEqual(float(np.linalg.norm(axis)), 1.0, places=12)
+
+        spin_los = np.rad2deg(
+            np.arccos(np.clip(np.dot(axes["spin_axis"], axes["line_of_sight"]), -1, 1))
+        )
+        magnetic_spin = np.rad2deg(
+            np.arccos(np.clip(np.dot(axes["magnetic_axis"], axes["spin_axis"]), -1, 1))
+        )
+        magnetic_los = np.rad2deg(
+            np.arccos(
+                np.clip(
+                    np.dot(axes["magnetic_axis"], axes["line_of_sight"]),
+                    -1,
+                    1,
+                )
+            )
+        )
+        self.assertAlmostEqual(float(spin_los), 134.0, places=10)
+        self.assertAlmostEqual(float(magnetic_spin), 137.0, places=10)
+        self.assertAlmostEqual(float(magnetic_los), 3.0, places=10)
 
 
 if __name__ == "__main__":

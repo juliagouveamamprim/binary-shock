@@ -21,6 +21,8 @@ class ViewerContractTests(unittest.TestCase):
         self.assertIn("createRadialPressureGlow", source)
         self.assertIn("createDiskPressureVolume", source)
         self.assertIn("createTexturedPulsar", source)
+        self.assertIn("createLaminarBeam", source)
+        self.assertIn("layerObjects.pulsarBeam", source)
         self.assertTrue(MODEL_PATH.is_file())
         self.assertGreater(MODEL_PATH.stat().st_size, 0)
         self.assertTrue(PULSAR_TEXTURE_PATH.is_file())
@@ -62,6 +64,29 @@ class ViewerContractTests(unittest.TestCase):
         self.assertIn("no extended stellar or pulsar halo", interpretation["body_lighting"])
         self.assertIn("compact, smoothly fading white glow", interpretation["body_lighting"])
         self.assertIn("not an observed surface map", interpretation["pulsar_surface_texture"])
+        self.assertIn("antipodal radio-beam", interpretation["pulsar_radio_beam"])
+        beam = physical["pulsar_radio_beam_display"]
+        self.assertEqual(beam["classification"], "model-informed artistic layer")
+        self.assertEqual(beam["emission_band"], "radio")
+        self.assertEqual(len(beam["unit_line_of_sight_scene_coordinates"]), 3)
+        self.assertEqual(len(beam["spin_axis_scene_coordinates"]), 3)
+        self.assertEqual(len(beam["magnetic_axis_scene_coordinates"]), 3)
+        self.assertAlmostEqual(
+            beam["radio_polarization_geometry"][
+                "closest_magnetic_line_of_sight_approach_deg"
+            ],
+            3.0,
+            places=10,
+        )
+        self.assertIn(
+            "not an IBSEn-calculated emissivity volume",
+            beam["unconstrained_choices"]["sheet_shape"],
+        )
+        geometry = beam["visual_geometry"]
+        self.assertEqual(geometry["lamina_count"], 11)
+        self.assertEqual(geometry["length_each_direction_separation_units"], 8.0)
+        self.assertEqual(geometry["bundle_radius_pulsar_display_radii"], 0.13)
+        self.assertIn("constant", geometry["cross_section"])
         disk = flows["decretion_disk"]
         self.assertLess(
             abs(disk["pulsar_height_from_disk_plane_separation_units"]),

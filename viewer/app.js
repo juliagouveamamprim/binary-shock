@@ -207,6 +207,102 @@ function createTexturedPulsar(position, radius, texture) {
   return group;
 }
 
+function createLaminarBeam(origin, magneticAxis, pulsarRadius, visualGeometry) {
+  const group = new THREE.Group();
+  group.name = "Pulsar antipodal radio beam — model-informed visual";
+  group.position.copy(origin);
+
+  const axis = magneticAxis.clone().normalize();
+  const sheetCount = visualGeometry.lamina_count;
+  const bundleRadius = pulsarRadius
+    * visualGeometry.bundle_radius_pulsar_display_radii;
+  const startDistance = pulsarRadius * 0.34;
+  const beamLength = visualGeometry.length_each_direction_separation_units;
+  const orbitalNormal = new THREE.Vector3(0, 0, 1);
+
+  [axis, axis.clone().negate()].forEach(function addBeamDirection(direction, directionIndex) {
+    const bundle = new THREE.Group();
+    bundle.name = directionIndex === 0 ? "Radio beam" : "Antipodal radio beam";
+    let sheetNormal = new THREE.Vector3().crossVectors(direction, orbitalNormal);
+    if (sheetNormal.lengthSq() < 1e-8) sheetNormal.set(1, 0, 0);
+    sheetNormal.normalize();
+    const sheetWidthAxis = new THREE.Vector3()
+      .crossVectors(direction, sheetNormal)
+      .normalize();
+    bundle.setRotationFromMatrix(
+      new THREE.Matrix4().makeBasis(sheetWidthAxis, direction, sheetNormal),
+    );
+
+    for (let index = 0; index < sheetCount; index += 1) {
+      const normalizedOffset = THREE.MathUtils.mapLinear(
+        index,
+        0,
+        sheetCount - 1,
+        -0.92,
+        0.92,
+      );
+      const offset = normalizedOffset * bundleRadius;
+      const chord = 2 * bundleRadius * Math.sqrt(
+        Math.max(0.0, 1 - normalizedOffset * normalizedOffset),
+      );
+      const centerWeight = 1 - Math.abs(normalizedOffset);
+      const color = new THREE.Color();
+      if (centerWeight > 0.72) {
+        color.set(0xd9ffff);
+      } else if (centerWeight > 0.34) {
+        color.set(0x42edff);
+      } else {
+        color.set(0x00bfe8);
+      }
+
+      const geometry = new THREE.PlaneGeometry(chord, beamLength, 1, 12);
+      geometry.translate(0, startDistance + beamLength * 0.5, 0);
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          beamColor: { value: color },
+          sheetOpacity: { value: 0.30 + 0.66 * Math.pow(centerWeight, 1.35) },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform vec3 beamColor;
+          uniform float sheetOpacity;
+          varying vec2 vUv;
+          void main() {
+            float transverse = pow(max(0.0, sin(3.14159265 * vUv.x)), 1.55);
+            float fineStriation = 0.72 + 0.28 * pow(
+              abs(sin(18.8495559 * vUv.x)),
+              7.0
+            );
+            float baseFade = smoothstep(0.0, 0.006, vUv.y);
+            float alpha = sheetOpacity * transverse * fineStriation * baseFade;
+            gl_FragColor = vec4(beamColor, alpha);
+          }
+        `,
+        side: THREE.DoubleSide,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const sheet = new THREE.Mesh(geometry, material);
+      sheet.name = "Parallel radio-beam lamina " + String(index + 1);
+      sheet.position.z = offset;
+      sheet.renderOrder = 7;
+      bundle.add(sheet);
+    }
+    group.add(bundle);
+  });
+
+  group.visible = false;
+  return group;
+}
+
 function createRadialFlow(options) {
   const random = seededRandom(options.seed);
   const positions = new Float32Array(options.count * 3);
@@ -701,6 +797,7 @@ async function loadScene() {
   const physical = metadata.physical_model;
   const positions = physical.scene_positions;
   const flowModel = physical.flow_model;
+  const beamModel = physical.pulsar_radio_beam_display;
   const display = metadata.visual_interpretation;
   const starPosition = new THREE.Vector3().fromArray(positions.be_star);
   const pulsarPosition = new THREE.Vector3().fromArray(positions.pulsar);
@@ -721,6 +818,15 @@ async function loadScene() {
     pulsarTexture,
   );
   scene.add(pulsarSurface);
+
+  const pulsarBeam = createLaminarBeam(
+    pulsarPosition,
+    new THREE.Vector3().fromArray(beamModel.magnetic_axis_scene_coordinates),
+    display.pulsar_display_radius_separation_units,
+    beamModel.visual_geometry,
+  );
+  scene.add(pulsarBeam);
+  layerObjects.pulsarBeam = pulsarBeam;
 
   const orbitDisplay = physical.orbit_display;
   const starOrbit = createOrbitPath(

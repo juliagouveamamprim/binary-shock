@@ -1,6 +1,6 @@
 {
   "title": "Binary Shock — PSR B1259−63 prototype",
-  "scene_version": "0.1.3",
+  "scene_version": "0.1.4",
   "classification": "Scientific visualization derived from an analytic axisymmetric model",
   "physical_model": {
     "software": "IBSEn",
@@ -3672,6 +3672,62 @@
         0.0
       ]
     },
+    "pulsar_radio_beam_display": {
+      "classification": "model-informed artistic layer",
+      "emission_band": "radio",
+      "line_of_sight_source": "IBSEn IBS3D.unit_los",
+      "unit_line_of_sight_scene_coordinates": [
+        -0.27388849226456957,
+        0.3113769087613713,
+        -0.9099612708765432
+      ],
+      "orbital_normal_scene_coordinates": [
+        0.0,
+        0.0,
+        1.0
+      ],
+      "spin_axis_scene_coordinates": [
+        -0.24205957096784306,
+        0.2751914120994302,
+        0.9304175679820246
+      ],
+      "magnetic_axis_scene_coordinates": [
+        -0.24205957096784333,
+        0.27519141209943043,
+        -0.9304175679820245
+      ],
+      "counter_beam_axis_scene_coordinates": [
+        0.24205957096784333,
+        -0.27519141209943043,
+        0.9304175679820245
+      ],
+      "radio_polarization_geometry": {
+        "spin_line_of_sight_angle_zeta_deg": 134.0,
+        "spin_line_of_sight_uncertainty_deg": 6.0,
+        "magnetic_spin_angle_alpha_deg": 137.0,
+        "magnetic_spin_uncertainty_deg": 0.3,
+        "closest_magnetic_line_of_sight_approach_deg": 2.999999999999923,
+        "source": {
+          "citation": "Shannon, Johnston & Manchester (2014), MNRAS 437, 3255–3264",
+          "doi": "10.1093/mnras/stt2123",
+          "url": "https://academic.oup.com/mnras/article/437/4/3255/1001679"
+        }
+      },
+      "unconstrained_choices": {
+        "spin_axis_sky_position_angle": "Not measured; placed in the line-of-sight/orbital-normal plane to minimize spin–orbit misalignment",
+        "rotational_phase": "Frozen at the closest magnetic-axis passage to the model line of sight",
+        "sheet_shape": "Parallel translucent laminae are an artistic depiction of a radio lighthouse beam, not an IBSEn-calculated emissivity volume"
+      },
+      "visual_geometry": {
+        "lamina_count": 11,
+        "length_each_direction_separation_units": 8.0,
+        "bundle_radius_pulsar_display_radii": 0.13,
+        "cross_section": "constant along the displayed length",
+        "palette": "cyan with a near-white cyan core and longitudinal brightness striations",
+        "endpoint": "Placed far outside the binary framing so the beam crosses the viewport without a visible terminal cap",
+        "scale_note": "Length and width are artistic display scales and do not encode a calculated radio-emission distance or opening angle"
+      }
+    },
     "flow_model": {
       "stellar_polar_wind": {
         "geometry": "isotropic radial flow",
@@ -3730,6 +3786,7 @@
     "body_lighting": "Low-intensity browser point lights are artistic visibility cues; no extended stellar or pulsar halo is exported; the browser adds only a compact, smoothly fading white glow around the pulsar surface",
     "pulsar_scale": "Strongly enlarged; a physical neutron-star radius is unresolved at this scale",
     "pulsar_surface_texture": "Original artistic thermal-emissivity texture with subtle cool mottling and a few sparse low-emissivity spots; not an observed surface map or an IBSEn output",
+    "pulsar_radio_beam": "Optional antipodal radio-beam layer aligned with a model-informed magnetic axis. Its orientation uses the IBSEn line of sight and published radio-polarization angles; its laminar sheet geometry, unmeasured sky azimuth, and frozen rotational phase are documented visual choices",
     "star_orbit": "Model-derived barycentric path; its translation keeps the current Be star at the scene origin and does not alter its shape or scale",
     "pulsar_orbit": "Model-derived barycentric path shown in the same translated coordinate frame and physical scale as the Be-star orbit",
     "pressure_fields": "Smooth browser volumes use the IBSEn pressure laws with contrast compression; both winds share one monotonic brightness mapping and spatial display window; brightness and opacity are display mappings, not gas density or physical opacity",

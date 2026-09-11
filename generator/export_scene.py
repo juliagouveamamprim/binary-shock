@@ -25,6 +25,10 @@ from ibsen import IBS3D, OpticalStar, Orbit, Pulsar, Winds
 
 DAY_SECONDS = 86_400.0
 AU_CM = 1.496e13
+PULSAR_VIEWING_ANGLE_DEG = 134.0
+PULSAR_VIEWING_ANGLE_UNCERTAINTY_DEG = 6.0
+PULSAR_MAGNETIC_OBLIQUITY_DEG = 137.0
+PULSAR_MAGNETIC_OBLIQUITY_UNCERTAINTY_DEG = 0.3
 
 
 @dataclass(frozen=True)
@@ -257,6 +261,51 @@ def _git_revision(ibsen_root: Path) -> str | None:
     return result.stdout.strip()
 
 
+def _model_informed_pulsar_axes(unit_los: np.ndarray) -> dict[str, np.ndarray]:
+    """Construct one documented pulsar-axis realization for the frozen scene.
+
+    Radio-polarization fits constrain the spin/line-of-sight angle and magnetic
+    obliquity, but not the spin-axis position angle on the sky.  We place the
+    spin axis in the line-of-sight/orbital-normal plane, selecting the solution
+    with the smallest spin--orbit misalignment.  The snapshot phase is then the
+    closest approach of the magnetic axis to the line of sight.
+    """
+    line_of_sight = np.asarray(unit_los, dtype=float)
+    line_of_sight /= np.linalg.norm(line_of_sight)
+    orbital_normal = np.array([0.0, 0.0, 1.0])
+
+    toward_orbital_normal = orbital_normal - np.dot(
+        orbital_normal, line_of_sight
+    ) * line_of_sight
+    toward_orbital_normal /= np.linalg.norm(toward_orbital_normal)
+
+    viewing_angle = np.deg2rad(PULSAR_VIEWING_ANGLE_DEG)
+    spin_axis = (
+        np.cos(viewing_angle) * line_of_sight
+        + np.sin(viewing_angle) * toward_orbital_normal
+    )
+    spin_axis /= np.linalg.norm(spin_axis)
+
+    toward_line_of_sight = line_of_sight - np.dot(
+        line_of_sight, spin_axis
+    ) * spin_axis
+    toward_line_of_sight /= np.linalg.norm(toward_line_of_sight)
+
+    magnetic_obliquity = np.deg2rad(PULSAR_MAGNETIC_OBLIQUITY_DEG)
+    magnetic_axis = (
+        np.cos(magnetic_obliquity) * spin_axis
+        + np.sin(magnetic_obliquity) * toward_line_of_sight
+    )
+    magnetic_axis /= np.linalg.norm(magnetic_axis)
+
+    return {
+        "line_of_sight": line_of_sight,
+        "orbital_normal": orbital_normal,
+        "spin_axis": spin_axis,
+        "magnetic_axis": magnetic_axis,
+    }
+
+
 def build_metadata(
     data: SceneData,
     display_limits: dict[str, float],
@@ -282,9 +331,24 @@ def build_metadata(
         - star_barycentric_now
     ) / data.separation_cm
     barycenter_scene = -star_barycentric_now / data.separation_cm
+    pulsar_axes = _model_informed_pulsar_axes(data.shock.unit_los)
+    closest_approach_deg = float(
+        np.rad2deg(
+            np.arccos(
+                np.clip(
+                    np.dot(
+                        pulsar_axes["magnetic_axis"],
+                        pulsar_axes["line_of_sight"],
+                    ),
+                    -1.0,
+                    1.0,
+                )
+            )
+        )
+    )
     return {
         "title": "Binary Shock — PSR B1259−63 prototype",
-        "scene_version": "0.1.3",
+        "scene_version": "0.1.4",
         "classification": "Scientific visualization derived from an analytic axisymmetric model",
         "physical_model": {
             "software": "IBSEn",
@@ -331,6 +395,81 @@ def build_metadata(
                     np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float)
                     / data.separation_cm
                 ).tolist(),
+            },
+            "pulsar_radio_beam_display": {
+                "classification": "model-informed artistic layer",
+                "emission_band": "radio",
+                "line_of_sight_source": "IBSEn IBS3D.unit_los",
+                "unit_line_of_sight_scene_coordinates": pulsar_axes[
+                    "line_of_sight"
+                ].tolist(),
+                "orbital_normal_scene_coordinates": pulsar_axes[
+                    "orbital_normal"
+                ].tolist(),
+                "spin_axis_scene_coordinates": pulsar_axes["spin_axis"].tolist(),
+                "magnetic_axis_scene_coordinates": pulsar_axes[
+                    "magnetic_axis"
+                ].tolist(),
+                "counter_beam_axis_scene_coordinates": (
+                    -pulsar_axes["magnetic_axis"]
+                ).tolist(),
+                "radio_polarization_geometry": {
+                    "spin_line_of_sight_angle_zeta_deg": PULSAR_VIEWING_ANGLE_DEG,
+                    "spin_line_of_sight_uncertainty_deg": (
+                        PULSAR_VIEWING_ANGLE_UNCERTAINTY_DEG
+                    ),
+                    "magnetic_spin_angle_alpha_deg": (
+                        PULSAR_MAGNETIC_OBLIQUITY_DEG
+                    ),
+                    "magnetic_spin_uncertainty_deg": (
+                        PULSAR_MAGNETIC_OBLIQUITY_UNCERTAINTY_DEG
+                    ),
+                    "closest_magnetic_line_of_sight_approach_deg": (
+                        closest_approach_deg
+                    ),
+                    "source": {
+                        "citation": (
+                            "Shannon, Johnston & Manchester (2014), MNRAS 437, "
+                            "3255–3264"
+                        ),
+                        "doi": "10.1093/mnras/stt2123",
+                        "url": (
+                            "https://academic.oup.com/mnras/article/437/4/3255/1001679"
+                        ),
+                    },
+                },
+                "unconstrained_choices": {
+                    "spin_axis_sky_position_angle": (
+                        "Not measured; placed in the line-of-sight/orbital-normal "
+                        "plane to minimize spin–orbit misalignment"
+                    ),
+                    "rotational_phase": (
+                        "Frozen at the closest magnetic-axis passage to the model "
+                        "line of sight"
+                    ),
+                    "sheet_shape": (
+                        "Parallel translucent laminae are an artistic depiction of a "
+                        "radio lighthouse beam, not an IBSEn-calculated emissivity volume"
+                    ),
+                },
+                "visual_geometry": {
+                    "lamina_count": 11,
+                    "length_each_direction_separation_units": 8.0,
+                    "bundle_radius_pulsar_display_radii": 0.13,
+                    "cross_section": "constant along the displayed length",
+                    "palette": (
+                        "cyan with a near-white cyan core and longitudinal "
+                        "brightness striations"
+                    ),
+                    "endpoint": (
+                        "Placed far outside the binary framing so the beam crosses the "
+                        "viewport without a visible terminal cap"
+                    ),
+                    "scale_note": (
+                        "Length and width are artistic display scales and do not encode "
+                        "a calculated radio-emission distance or opening angle"
+                    ),
+                },
             },
             "flow_model": {
                 "stellar_polar_wind": {
@@ -393,6 +532,13 @@ def build_metadata(
                 "Original artistic thermal-emissivity texture with subtle cool mottling "
                 "and a few sparse low-emissivity spots; not an observed surface map or "
                 "an IBSEn output"
+            ),
+            "pulsar_radio_beam": (
+                "Optional antipodal radio-beam layer aligned with a model-informed "
+                "magnetic axis. Its orientation uses the IBSEn line of sight and "
+                "published radio-polarization angles; its laminar sheet geometry, "
+                "unmeasured sky azimuth, and frozen rotational phase are documented "
+                "visual choices"
             ),
             "star_orbit": (
                 "Model-derived barycentric path; its translation keeps the current Be star "
