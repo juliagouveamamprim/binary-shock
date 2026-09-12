@@ -24,12 +24,12 @@ class ExportSceneTests(unittest.TestCase):
 
     def test_small_scene_round_trips_through_glb(self) -> None:
         data, _ = calculate_scene(n_theta=25, n_phi=32, s_max=1.0)
-        expected_star_relative = (
-            np.asarray(data.shock.vec_sIBS, dtype=float) / data.separation_cm
+        expected_barycentric = (
+            np.asarray(data.shock.r_vec, dtype=float) / data.separation_cm
         )
         np.testing.assert_allclose(
-            data.shock_vertices.reshape(expected_star_relative.shape),
-            expected_star_relative,
+            data.shock_vertices.reshape(expected_barycentric.shape),
+            expected_barycentric,
         )
         scene, _ = build_glb_scene(data)
         blob = trimesh.exchange.gltf.export_glb(scene, include_normals=True)

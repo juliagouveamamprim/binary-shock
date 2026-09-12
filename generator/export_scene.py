@@ -104,10 +104,9 @@ def calculate_scene(
     )
 
     separation_cm = float(np.asarray(orbit.r(time_seconds)))
-    # IBSEn >= 0.5.13 stores ``r_vec`` in barycentric coordinates.  Binary
-    # Shock deliberately keeps the Be star at the scene origin, so use the
-    # explicitly star-relative displacement vectors instead.
-    vertices_grid = np.asarray(shock.vec_sIBS, dtype=float) / separation_cm
+    # IBSEn >= 0.5.13 stores ``r_vec`` in barycentric coordinates.  Preserve
+    # that native frame for the paper-reference scene.
+    vertices_grid = np.asarray(shock.r_vec, dtype=float) / separation_cm
     doppler = np.asarray(shock.dopl, dtype=float)
     normalized, display_low, display_high = _normalize_field(doppler)
     rgba = _rgba_from_doppler(normalized)
@@ -158,7 +157,11 @@ def _set_material(mesh: trimesh.Trimesh, material: trimesh.visual.material.PBRMa
 def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
     separation = data.separation_cm
     star_radius = float(data.star.R_s / separation)
-    pulsar_position = np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float) / separation
+    star_position = np.asarray(data.orbit.vector_s(data.time_seconds), dtype=float) / separation
+    pulsar_position = np.asarray(data.orbit.vector_p(data.time_seconds), dtype=float) / separation
+    relative_pulsar_position = (
+        np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float) / separation
+    )
 
     shock_material = _pbr_material(
         "Shock — Doppler mapped",
@@ -178,13 +181,14 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
         visual=shock_visual,
         process=False,
         metadata={
-            "source": "IBSEn IBS3D.vec_sIBS (star-relative)",
+            "source": "IBSEn IBS3D.r_vec (barycentric)",
             "field": "IBSEn IBS3D.dopl",
             "coordinate_unit": "instantaneous star-pulsar separation",
         },
     )
 
     star_mesh = trimesh.creation.icosphere(subdivisions=4, radius=star_radius)
+    star_mesh.apply_translation(star_position)
     _set_material(
         star_mesh,
         _pbr_material(
@@ -212,8 +216,8 @@ def build_glb_scene(data: SceneData) -> tuple[trimesh.Scene, dict[str, float]]:
 
     disk_inner_radius = star_radius * 1.22
     disk_normal = np.asarray(data.star.n_disk, dtype=float)
-    pulsar_height = float(np.dot(pulsar_position, disk_normal))
-    pulsar_in_plane = pulsar_position - pulsar_height * disk_normal
+    pulsar_height = float(np.dot(relative_pulsar_position, disk_normal))
+    pulsar_in_plane = relative_pulsar_position - pulsar_height * disk_normal
     pulsar_in_plane_radius = float(np.linalg.norm(pulsar_in_plane))
     # IBSEn does not prescribe a hard disk edge. Extend the display volume
     # beyond the pulsar's projected disk-plane radius, then fade it smoothly in
@@ -324,13 +328,29 @@ def build_metadata(
     )
     star_orbit_scene = (
         np.asarray(data.orbit.vector_s(orbit_times), dtype=float).T
-        - star_barycentric_now
-    ) / data.separation_cm
+        / data.separation_cm
+    )
     pulsar_orbit_scene = (
         np.asarray(data.orbit.vector_p(orbit_times), dtype=float).T
-        - star_barycentric_now
+        / data.separation_cm
+    )
+    barycenter_scene = np.zeros(3, dtype=float)
+    star_position_scene = star_barycentric_now / data.separation_cm
+    pulsar_position_scene = (
+        np.asarray(data.orbit.vector_p(data.time_seconds), dtype=float)
+        / data.separation_cm
+    )
+    apex_ring_scene = (
+        np.asarray(data.shock.r_vec, dtype=float)[:, 0, :]
+        / data.separation_cm
+    )
+    apex_scene = (
+        np.asarray(data.shock.vec_p, dtype=float)
+        - np.asarray(data.shock.symm_ax, dtype=float) * float(data.shock.r_pe)
     ) / data.separation_cm
-    barycenter_scene = -star_barycentric_now / data.separation_cm
+    first_ring_apex_offset = float(
+        np.max(np.linalg.norm(apex_ring_scene - apex_scene, axis=1))
+    )
     pulsar_axes = _model_informed_pulsar_axes(data.shock.unit_los)
     closest_approach_deg = float(
         np.rad2deg(
@@ -348,7 +368,7 @@ def build_metadata(
     )
     return {
         "title": "Binary Shock — PSR B1259−63 prototype",
-        "scene_version": "0.1.4",
+        "scene_version": "0.2.0",
         "classification": "Scientific visualization derived from an analytic axisymmetric model",
         "physical_model": {
             "software": "IBSEn",
@@ -363,14 +383,58 @@ def build_metadata(
             "shock_opening_angle_radians": float(data.shock.thetainf),
             "disk_pressure_strength_f_d": disk_strength,
             "shock_arclength_cutoff_s_max": s_max,
-            "coordinate_origin": "Be star center",
+            "coordinate_origin": "Binary barycenter",
             "coordinate_unit": "instantaneous star-pulsar separation",
             "scene_positions": {
-                "be_star": [0.0, 0.0, 0.0],
-                "pulsar": (
-                    np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float)
-                    / data.separation_cm
-                ).tolist(),
+                "be_star": star_position_scene.tolist(),
+                "pulsar": pulsar_position_scene.tolist(),
+            },
+            "reference_geometry": {
+                "classification": "direct model geometry and coordinate annotations",
+                "coordinate_origin": "Binary barycenter",
+                "coordinate_unit": "instantaneous star-pulsar separation",
+                "coordinate_axes": {
+                    "origin_scene_coordinates": [0.0, 0.0, 0.0],
+                    "x_unit_vector": [1.0, 0.0, 0.0],
+                    "y_unit_vector": [0.0, 1.0, 0.0],
+                    "meaning": "Cartesian axes of the exported IBSEn scene",
+                },
+                "disk_normal": {
+                    "unit_vector": (
+                        np.asarray(data.star.n_disk, dtype=float)
+                        / np.linalg.norm(data.star.n_disk)
+                    ).tolist(),
+                    "source": "IBSEn OpticalStar.n_disk",
+                    "meaning": "Normal to the Be-star decretion-disk midplane",
+                },
+                "line_of_sight": {
+                    "unit_vector": pulsar_axes["line_of_sight"].tolist(),
+                    "source": "IBSEn IBS3D.unit_los",
+                    "meaning": (
+                        "Line-of-sight direction used by IBSEn for viewing-angle "
+                        "dependent calculations"
+                    ),
+                },
+                "vector_display_note": (
+                    "Arrow lengths are viewer scales; only their origins and directions "
+                    "carry model meaning"
+                ),
+                "apex": {
+                    "scene_coordinates": apex_scene.tolist(),
+                    "source": "IBS3D.vec_p - IBS3D.symm_ax * IBS3D.r_pe",
+                    "first_surface_ring_max_offset_scene_units": (
+                        first_ring_apex_offset
+                    ),
+                    "meaning": (
+                        "Analytic intrabinary-shock stagnation point where the "
+                        "opposing pressures balance on the symmetry axis"
+                    ),
+                },
+                "barycenter": {
+                    "scene_coordinates": barycenter_scene.tolist(),
+                    "source": "origin of the IBSEn barycentric coordinate frame",
+                    "meaning": "Center of mass of the binary system",
+                },
             },
             "orbit_display": {
                 "source": "IBSEn Orbit.vector_s and Orbit.vector_p",
@@ -384,16 +448,15 @@ def build_metadata(
                 ),
                 "samples": int(len(star_orbit_scene)),
                 "coordinate_frame": (
-                    "Barycentric orbit translated by the current Be-star position "
-                    "and scaled by the instantaneous star-pulsar separation"
+                    "Native IBSEn barycentric frame scaled by the instantaneous "
+                    "star-pulsar separation"
                 ),
                 "be_star_path_scene_coordinates": star_orbit_scene.tolist(),
                 "pulsar_path_scene_coordinates": pulsar_orbit_scene.tolist(),
                 "barycenter_scene_coordinates": barycenter_scene.tolist(),
-                "current_be_star_scene_coordinates": [0.0, 0.0, 0.0],
+                "current_be_star_scene_coordinates": star_position_scene.tolist(),
                 "current_pulsar_scene_coordinates": (
-                    np.asarray(data.orbit.vector_sp(data.time_seconds), dtype=float)
-                    / data.separation_cm
+                    pulsar_position_scene
                 ).tolist(),
             },
             "pulsar_radio_beam_display": {
@@ -541,12 +604,11 @@ def build_metadata(
                 "visual choices"
             ),
             "star_orbit": (
-                "Model-derived barycentric path; its translation keeps the current Be star "
-                "at the scene origin and does not alter its shape or scale"
+                "Model-derived barycentric path in the native IBSEn coordinate frame"
             ),
             "pulsar_orbit": (
-                "Model-derived barycentric path shown in the same translated coordinate "
-                "frame and physical scale as the Be-star orbit"
+                "Model-derived barycentric path shown in the same native frame and "
+                "physical scale as the Be-star orbit"
             ),
             "pressure_fields": (
                 "Smooth browser volumes use the IBSEn pressure laws with contrast compression; "
@@ -571,7 +633,15 @@ def render_preview(data: SceneData, output: Path) -> None:
     grid = data.shock_vertices.reshape(data.shock.n_phi, data.shock.n, 3)
     rgba = data.shock_rgba.astype(float) / 255.0
     star_radius = float(data.star.R_s / data.separation_cm)
-    pulsar_position = np.asarray(data.orbit.vector_sp(data.time_seconds)) / data.separation_cm
+    star_position = (
+        np.asarray(data.orbit.vector_s(data.time_seconds)) / data.separation_cm
+    )
+    pulsar_position = (
+        np.asarray(data.orbit.vector_p(data.time_seconds)) / data.separation_cm
+    )
+    relative_pulsar_position = (
+        np.asarray(data.orbit.vector_sp(data.time_seconds)) / data.separation_cm
+    )
 
     fig = plt.figure(figsize=(13.2, 8.0), facecolor="#02030a")
     ax = fig.add_subplot(111, projection="3d", facecolor="#02030a")
@@ -589,9 +659,9 @@ def render_preview(data: SceneData, output: Path) -> None:
 
     u = np.linspace(0.0, 2.0 * np.pi, 72)
     v = np.linspace(0.0, np.pi, 36)
-    sx = star_radius * np.outer(np.cos(u), np.sin(v))
-    sy = star_radius * np.outer(np.sin(u), np.sin(v))
-    sz = star_radius * np.outer(np.ones_like(u), np.cos(v))
+    sx = star_position[0] + star_radius * np.outer(np.cos(u), np.sin(v))
+    sy = star_position[1] + star_radius * np.outer(np.sin(u), np.sin(v))
+    sz = star_position[2] + star_radius * np.outer(np.ones_like(u), np.cos(v))
     ax.plot_surface(sx, sy, sz, color="#ffd59a", linewidth=0, shade=True)
 
     pulsar_radius = 0.026
@@ -601,10 +671,9 @@ def render_preview(data: SceneData, output: Path) -> None:
     ax.plot_surface(px, py, pz, color="#bfe9ff", linewidth=0, shade=True)
 
     orbit_times = np.linspace(-0.5 * data.orbit.T, 0.5 * data.orbit.T, 361)
-    star_now_barycentric = np.asarray(data.orbit.vector_s(data.time_seconds))
     star_orbit = (
-        np.asarray(data.orbit.vector_s(orbit_times)).T - star_now_barycentric
-    ) / data.separation_cm
+        np.asarray(data.orbit.vector_s(orbit_times)).T / data.separation_cm
+    )
     ax.plot(
         star_orbit[:, 0],
         star_orbit[:, 1],
@@ -624,9 +693,9 @@ def render_preview(data: SceneData, output: Path) -> None:
     basis_u = np.cross(normal, helper)
     basis_u /= np.linalg.norm(basis_u)
     basis_v = np.cross(normal, basis_u)
-    pulsar_height = float(np.dot(pulsar_position, normal))
+    pulsar_height = float(np.dot(relative_pulsar_position, normal))
     pulsar_plane_radius = float(
-        np.linalg.norm(pulsar_position - pulsar_height * normal)
+        np.linalg.norm(relative_pulsar_position - pulsar_height * normal)
     )
     disk_outer_radius = max(0.52, 1.35 * pulsar_plane_radius)
     disk_inner_radius = star_radius * 1.22
@@ -649,6 +718,7 @@ def render_preview(data: SceneData, output: Path) -> None:
         radii[:, None] * np.cos(angles)[:, None] * basis_u
         + radii[:, None] * np.sin(angles)[:, None] * basis_v
         + heights[:, None] * normal
+        + star_position
     )
     edge_start = 0.72 * disk_outer_radius
     edge_t = np.clip(

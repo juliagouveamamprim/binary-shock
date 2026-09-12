@@ -24,8 +24,14 @@
 
     <header class="viewer-header">
       <div>
-        <p class="eyebrow">PSR B1259−63 · ANALYTIC MODEL</p>
+        <p class="eyebrow">PSR B1259−63 · PAPER REFERENCE · ANALYTIC MODEL</p>
         <h1>Binary Shock</h1>
+        <dl class="scene-metadata" aria-label="Model parameters">
+          <div><dt>Epoch</dt><dd id="meta-epoch">—</dd></div>
+          <div><dt>Separation</dt><dd id="meta-separation">—</dd></div>
+          <div><dt>β</dt><dd id="meta-beta">—</dd></div>
+          <div><dt>Doppler</dt><dd id="meta-doppler">—</dd></div>
+        </dl>
       </div>
       <div class="status" id="load-status" role="status">
         <span class="status-light" aria-hidden="true"></span>
@@ -33,7 +39,15 @@
       </div>
     </header>
 
-    <aside class="control-panel" aria-label="Scene controls">
+    <button
+      type="button"
+      class="panel-toggle"
+      id="panel-toggle"
+      aria-controls="control-panel"
+      aria-expanded="false"
+    >Layers</button>
+
+    <aside class="control-panel" id="control-panel" aria-label="Scene controls">
       <section>
         <p class="section-label">View</p>
         <div class="view-buttons">
@@ -55,7 +69,7 @@
         </label>
       </section>
 
-      <section>
+      <section class="artistic-only">
         <p class="section-label">Pulsar context</p>
         <label class="layer-toggle">
           <input type="checkbox" data-layer="pulsarBeam">
@@ -68,15 +82,53 @@
       <section>
         <p class="section-label">Orbital context</p>
         <label class="layer-toggle">
-          <input type="checkbox" data-layer="starOrbit">
+          <input type="checkbox" data-layer="starOrbit" checked>
           <span class="swatch swatch-star-orbit"></span>
           <span>Be-star orbit</span>
           <small>MODEL</small>
         </label>
         <label class="layer-toggle">
-          <input type="checkbox" data-layer="pulsarOrbit">
+          <input type="checkbox" data-layer="pulsarOrbit" checked>
           <span class="swatch swatch-pulsar-orbit"></span>
           <span>Pulsar orbit</span>
+          <small>MODEL</small>
+        </label>
+      </section>
+
+      <section>
+        <p class="section-label">Reference points</p>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="apex" checked>
+          <span class="swatch swatch-apex"></span>
+          <span>Shock apex</span>
+          <small>MODEL</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="barycenter" checked>
+          <span class="swatch swatch-barycenter"></span>
+          <span>Barycenter</span>
+          <small>ORBIT</small>
+        </label>
+      </section>
+
+      <section>
+        <p class="section-label">Reference directions</p>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="coordinateAxes" checked>
+          <span class="swatch swatch-axes"></span>
+          <span>x–y axes</span>
+          <small>FRAME</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="diskNormal" checked>
+          <span class="swatch swatch-disk-normal"></span>
+          <span>Disk normal</span>
+          <small>MODEL</small>
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" data-layer="lineOfSight" checked>
+          <span class="swatch swatch-los"></span>
+          <span>Line of sight</span>
           <small>MODEL</small>
         </label>
       </section>
@@ -86,7 +138,7 @@
         <label class="layer-toggle">
           <input type="checkbox" data-layer="stellarPressure" checked>
           <span class="swatch swatch-star-pressure"></span>
-          <span>Stellar wind pressure</span>
+          <span>Stellar pressure · apex isobar</span>
           <small>MODEL FIELD</small>
         </label>
         <label class="layer-toggle">
@@ -98,12 +150,12 @@
         <label class="layer-toggle">
           <input type="checkbox" data-layer="pulsarPressure" checked>
           <span class="swatch swatch-pulsar-pressure"></span>
-          <span>Pulsar wind pressure</span>
+          <span>Pulsar pressure · apex isobar</span>
           <small>MODEL FIELD</small>
         </label>
       </section>
 
-      <section>
+      <section class="artistic-only">
         <p class="section-label">Flow tracers</p>
         <label class="layer-toggle">
           <input type="checkbox" data-layer="stellarWind" checked>
@@ -125,24 +177,21 @@
         </label>
       </section>
 
-      <section class="metadata-panel">
-        <p class="section-label">Loaded from JSON</p>
-        <dl>
-          <div><dt>Epoch</dt><dd id="meta-epoch">—</dd></div>
-          <div><dt>Separation</dt><dd id="meta-separation">—</dd></div>
-          <div><dt>Wind ratio β</dt><dd id="meta-beta">—</dd></div>
-          <div><dt>Doppler range</dt><dd id="meta-doppler">—</dd></div>
-        </dl>
-      </section>
-
       <p class="interpretation-note">
-        Wind volumes share one contrast-compressed pressure scale; moving points
-        show flow directions. They are model visualizations, not simulated particles.
+        Static reference view. The radial-wind shells are isobars evaluated at
+        each wind's shock-apex distance. Disk brightness and opacity encode
+        contrast-compressed model pressure. No tracer layer is shown.
       </p>
     </aside>
 
     <div class="object-label" id="star-label">Be star</div>
     <div class="object-label" id="pulsar-label">Pulsar</div>
+    <div class="object-label reference-label apex-label" id="apex-label">Shock apex</div>
+    <div class="object-label reference-label barycenter-label" id="barycenter-label">Barycenter</div>
+    <div class="object-label vector-label x-axis-label" id="x-axis-label">x</div>
+    <div class="object-label vector-label y-axis-label" id="y-axis-label">y</div>
+    <div class="object-label vector-label disk-normal-label" id="disk-normal-label">n<sub>disk</sub></div>
+    <div class="object-label vector-label los-label" id="los-label">LOS</div>
 
     <footer class="viewer-footer">
       <span>Drag to orbit · scroll or pinch to zoom</span>

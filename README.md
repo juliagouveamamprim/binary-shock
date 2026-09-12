@@ -28,12 +28,16 @@ From the repository root, start a local web server:
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000/viewer/`. The viewer loads the generated GLB
-and JSON files and adds two separate kinds of layers: static pressure-field
-volumes and moving flow tracers. Their geometry and scaling laws come from the
-model, but the visible points are a display sampling rather than simulation
-particles. Optional orbital-context layers show the IBSEn barycentric orbits of
-the Be star and pulsar.
+Then open `http://localhost:8000/viewer/`. The default paper-reference preset
+loads the generated GLB and JSON files with a static presentation: Be star,
+textured neutron star, analytic shock, pressure fields, both barycentric orbits,
+the shock apex, the barycenter, the exported `x`–`y` axes, the decretion-disk
+normal, and the IBSEn line of sight. No particle or flow-tracer layer appears in
+the paper preset. Its radial-wind pressure layers are provisional isobaric
+reference shells drawn through the analytic shock apex.
+
+Open `http://localhost:8000/viewer/?preset=artistic` to retain the earlier
+cinematic defaults while the two presentations are developed together.
 
 ## Reproduce the prototype scene
 

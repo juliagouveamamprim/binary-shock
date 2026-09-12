@@ -19,10 +19,22 @@ class ViewerContractTests(unittest.TestCase):
         self.assertIn("../public/models/binary-shock-v0.1.metadata.json", source)
         self.assertIn("../public/textures/neutron-star-thermal-v0.3.png", source)
         self.assertIn("createRadialPressureGlow", source)
+        self.assertIn("createRadialPressureIsosurface", source)
+        self.assertIn("stellarApexRadius", source)
+        self.assertIn("pulsarApexRadius", source)
         self.assertIn("createDiskPressureVolume", source)
         self.assertIn("createTexturedPulsar", source)
         self.assertIn("createLaminarBeam", source)
         self.assertIn("layerObjects.pulsarBeam", source)
+        self.assertIn("createReferenceMarker", source)
+        self.assertIn("createSceneLabel", source)
+        self.assertIn("3D label connector", source)
+        self.assertIn("createCoordinateAxes", source)
+        self.assertIn("Decretion-disk midplane pressure contour", source)
+        self.assertIn("Decretion-disk one-scale-height contour", source)
+        self.assertIn("Decretion-disk flared scale-height guide", source)
+        self.assertIn("triplanar", source)
+        self.assertIn('VIEW_PRESET !== "paper"', source)
         self.assertTrue(MODEL_PATH.is_file())
         self.assertGreater(MODEL_PATH.stat().st_size, 0)
         self.assertTrue(PULSAR_TEXTURE_PATH.is_file())
@@ -47,6 +59,23 @@ class ViewerContractTests(unittest.TestCase):
         )
         self.assertEqual(len(flows["decretion_disk"]["normal_scene_coordinates"]), 3)
         self.assertEqual(len(physical["scene_positions"]["pulsar"]), 3)
+        references = physical["reference_geometry"]
+        self.assertEqual(references["coordinate_origin"], "Binary barycenter")
+        self.assertEqual(
+            references["coordinate_axes"]["origin_scene_coordinates"],
+            [0.0, 0.0, 0.0],
+        )
+        self.assertEqual(references["coordinate_axes"]["x_unit_vector"], [1.0, 0.0, 0.0])
+        self.assertEqual(references["coordinate_axes"]["y_unit_vector"], [0.0, 1.0, 0.0])
+        self.assertEqual(len(references["disk_normal"]["unit_vector"]), 3)
+        self.assertEqual(len(references["line_of_sight"]["unit_vector"]), 3)
+        self.assertEqual(len(references["apex"]["scene_coordinates"]), 3)
+        self.assertLess(
+            references["apex"]["first_surface_ring_max_offset_scene_units"],
+            1e-3,
+        )
+        self.assertEqual(len(references["barycenter"]["scene_coordinates"]), 3)
+        self.assertIn("Arrow lengths are viewer scales", references["vector_display_note"])
         orbit = physical["orbit_display"]
         self.assertEqual(
             orbit["source"],
@@ -58,8 +87,25 @@ class ViewerContractTests(unittest.TestCase):
         self.assertEqual(len(orbit["be_star_path_scene_coordinates"]), 361)
         self.assertEqual(len(orbit["pulsar_path_scene_coordinates"]), 361)
         self.assertEqual(len(orbit["barycenter_scene_coordinates"]), 3)
-        self.assertEqual(orbit["current_be_star_scene_coordinates"], [0.0, 0.0, 0.0])
+        self.assertNotEqual(orbit["current_be_star_scene_coordinates"], [0.0, 0.0, 0.0])
         self.assertEqual(len(orbit["current_pulsar_scene_coordinates"]), 3)
+        self.assertEqual(orbit["barycenter_scene_coordinates"], [0.0, 0.0, 0.0])
+        self.assertEqual(
+            orbit["current_be_star_scene_coordinates"],
+            physical["scene_positions"]["be_star"],
+        )
+        self.assertEqual(
+            orbit["current_pulsar_scene_coordinates"],
+            physical["scene_positions"]["pulsar"],
+        )
+        for coordinate in range(3):
+            center_of_mass_coordinate = (
+                orbit["be_star_mass_g"]
+                * orbit["current_be_star_scene_coordinates"][coordinate]
+                + orbit["pulsar_mass_g"]
+                * orbit["current_pulsar_scene_coordinates"][coordinate]
+            ) / (orbit["be_star_mass_g"] + orbit["pulsar_mass_g"])
+            self.assertAlmostEqual(center_of_mass_coordinate, 0.0, places=12)
         interpretation = metadata["visual_interpretation"]
         self.assertIn("no extended stellar or pulsar halo", interpretation["body_lighting"])
         self.assertIn("compact, smoothly fading white glow", interpretation["body_lighting"])

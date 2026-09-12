@@ -5,11 +5,18 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 const MODEL_URL = "../public/models/binary-shock-v0.1.glb";
 const METADATA_URL = "../public/models/binary-shock-v0.1.metadata.json";
 const PULSAR_TEXTURE_URL = "../public/textures/neutron-star-thermal-v0.3.png";
+const VIEW_PRESET = new URLSearchParams(window.location.search).get("preset") === "artistic"
+  ? "artistic"
+  : "paper";
+
+document.body.dataset.preset = VIEW_PRESET;
 
 const canvas = document.getElementById("scene-canvas");
 const statusElement = document.getElementById("load-status");
 const errorPanel = document.getElementById("error-panel");
 const errorMessage = document.getElementById("error-message");
+const controlPanel = document.getElementById("control-panel");
+const panelToggle = document.getElementById("panel-toggle");
 
 const renderer = new THREE.WebGLRenderer({
   canvas,
@@ -42,8 +49,19 @@ coolLight.position.set(-2.5, -1.0, 3.2);
 scene.add(coolLight);
 
 const layerObjects = {};
+const layerLabels = {};
 const animatedFlows = [];
 const labelTargets = {};
+const PAPER_LABEL_OFFSETS = {
+  "star-label": [58, 54],
+  "pulsar-label": [-54, -34],
+  "apex-label": [-88, 0],
+  "barycenter-label": [-58, 42],
+  "x-axis-label": [28, -2],
+  "y-axis-label": [12, -32],
+  "disk-normal-label": [34, -38],
+  "los-label": [22, 30],
+};
 
 function setStatus(message, state) {
   statusElement.querySelector("span:last-child").textContent = message;
@@ -132,7 +150,10 @@ function addBackgroundStars() {
     sizeAttenuation: true,
     depthWrite: false,
   });
-  scene.add(new THREE.Points(geometry, material));
+  const points = new THREE.Points(geometry, material);
+  points.name = "Background stars — artistic context";
+  scene.add(points);
+  return points;
 }
 
 function findObject(root, predicate) {
@@ -154,11 +175,13 @@ function prepareModel(root) {
       const material = source.clone();
       if (name.includes("shock")) {
         material.transparent = true;
-        material.opacity = 0.68;
+        material.opacity = VIEW_PRESET === "paper" ? 0.56 : 0.68;
         material.depthWrite = false;
         material.side = THREE.DoubleSide;
         material.vertexColors = true;
-        if (material.emissive) material.emissive.multiplyScalar(1.35);
+        if (material.emissive) {
+          material.emissive.multiplyScalar(VIEW_PRESET === "paper" ? 0.72 : 1.35);
+        }
       } else if (name.includes("disk")) {
         material.transparent = true;
         material.opacity = 0.52;
@@ -204,6 +227,202 @@ function createTexturedPulsar(position, radius, texture) {
   group.name = "Pulsar browser surface";
   group.position.copy(position);
   group.add(glow, sphere);
+  return group;
+}
+
+function makeReferenceMarkerTexture(color, glyph) {
+  const textureCanvas = document.createElement("canvas");
+  textureCanvas.width = 128;
+  textureCanvas.height = 128;
+  const context = textureCanvas.getContext("2d");
+  context.clearRect(0, 0, 128, 128);
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = 5;
+  context.beginPath();
+  context.arc(64, 64, 27, 0, Math.PI * 2);
+  context.stroke();
+
+  context.lineWidth = 4;
+  context.beginPath();
+  if (glyph === "crosshair") {
+    context.moveTo(64, 15);
+    context.lineTo(64, 42);
+    context.moveTo(64, 86);
+    context.lineTo(64, 113);
+    context.moveTo(15, 64);
+    context.lineTo(42, 64);
+    context.moveTo(86, 64);
+    context.lineTo(113, 64);
+    context.stroke();
+    context.beginPath();
+    context.arc(64, 64, 5, 0, Math.PI * 2);
+    context.fill();
+  } else {
+    context.moveTo(45, 45);
+    context.lineTo(83, 83);
+    context.moveTo(83, 45);
+    context.lineTo(45, 83);
+    context.stroke();
+  }
+
+  const texture = new THREE.CanvasTexture(textureCanvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function createReferenceMarker(position, options) {
+  const material = new THREE.SpriteMaterial({
+    map: makeReferenceMarkerTexture(options.color, options.glyph),
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.96,
+    depthWrite: false,
+    depthTest: false,
+    toneMapped: false,
+  });
+  const marker = new THREE.Sprite(material);
+  marker.name = options.name;
+  marker.position.copy(position);
+  marker.scale.setScalar(options.size);
+  marker.renderOrder = 30;
+  return marker;
+}
+
+function createSceneLabel(text, position, options) {
+  const labelCanvas = document.createElement("canvas");
+  labelCanvas.width = 512;
+  labelCanvas.height = 128;
+  const context = labelCanvas.getContext("2d");
+  context.clearRect(0, 0, labelCanvas.width, labelCanvas.height);
+  context.font = "500 42px Inter, Arial, sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.shadowColor = "rgba(0,0,0,0.95)";
+  context.shadowBlur = 9;
+  context.lineWidth = 7;
+  context.strokeStyle = "rgba(0,0,0,0.92)";
+  context.strokeText(text, 256, 64);
+  context.fillStyle = options.color;
+  context.fillText(text, 256, 64);
+
+  const texture = new THREE.CanvasTexture(labelCanvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    toneMapped: false,
+  }));
+  const height = options.height || 0.22;
+  sprite.scale.set(height * 4, height, 1);
+  const offset = options.offset || new THREE.Vector3();
+  sprite.position.copy(offset);
+  sprite.center.set(0.5, 0.5);
+  sprite.renderOrder = 40;
+  sprite.name = text + " — fixed 3D annotation";
+
+  const connectorEnd = offset.clone().multiplyScalar(0.78);
+  const connectorGeometry = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(),
+    connectorEnd,
+  ]);
+  const connector = new THREE.Line(
+    connectorGeometry,
+    new THREE.LineBasicMaterial({
+      color: options.color,
+      transparent: true,
+      opacity: options.connectorOpacity || 0.66,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  connector.name = text + " — 3D label connector";
+  connector.renderOrder = 18;
+
+  const annotation = new THREE.Group();
+  annotation.name = text + " — anchored 3D annotation";
+  annotation.position.copy(position);
+  if (options.connector !== false) annotation.add(connector);
+  annotation.add(sprite);
+  scene.add(annotation);
+  if (options.layer) {
+    if (!layerLabels[options.layer]) layerLabels[options.layer] = [];
+    layerLabels[options.layer].push(annotation);
+  }
+  return annotation;
+}
+
+function createVectorArrow(origin, direction, options) {
+  const normalizedDirection = direction.clone().normalize();
+  const arrow = new THREE.ArrowHelper(
+    normalizedDirection,
+    origin,
+    options.length,
+    options.color,
+    options.headLength,
+    options.headWidth,
+  );
+  arrow.name = options.name;
+  arrow.line.material.transparent = true;
+  const opacity = options.opacity === undefined ? 0.92 : options.opacity;
+  arrow.line.material.opacity = opacity;
+  if (options.dashed) {
+    arrow.line.material.dispose();
+    arrow.line.material = new THREE.LineDashedMaterial({
+      color: options.color,
+      transparent: true,
+      opacity,
+      dashSize: options.dashSize === undefined ? 0.035 : options.dashSize,
+      gapSize: options.gapSize === undefined ? 0.022 : options.gapSize,
+    });
+    arrow.line.computeLineDistances();
+  }
+  arrow.cone.material.transparent = true;
+  arrow.cone.material.opacity = opacity;
+  arrow.userData.labelPosition = origin.clone().addScaledVector(
+    normalizedDirection,
+    options.length,
+  );
+  return arrow;
+}
+
+function createCoordinateAxes(origin, referenceGeometry) {
+  const group = new THREE.Group();
+  group.name = "IBSEn x-y coordinate axes";
+  const length = 0.34;
+  const xArrow = createVectorArrow(
+    origin,
+    new THREE.Vector3().fromArray(referenceGeometry.coordinate_axes.x_unit_vector),
+    {
+      name: "IBSEn x axis",
+      length,
+      color: 0xef5a5a,
+      headLength: 0.038,
+      headWidth: 0.016,
+      opacity: 0.78,
+    },
+  );
+  const yArrow = createVectorArrow(
+    origin,
+    new THREE.Vector3().fromArray(referenceGeometry.coordinate_axes.y_unit_vector),
+    {
+      name: "IBSEn y axis",
+      length,
+      color: 0x62d67c,
+      headLength: 0.038,
+      headWidth: 0.016,
+      opacity: 0.78,
+    },
+  );
+  group.add(xArrow, yArrow);
+  group.userData.labelPositions = {
+    x: xArrow.userData.labelPosition,
+    y: yArrow.userData.labelPosition,
+  };
   return group;
 }
 
@@ -422,7 +641,9 @@ function createRadialPressureGlow(options) {
       color: options.color,
       transparent: true,
       opacity: options.opacity * layer.weight * pressureLight,
-      blending: THREE.AdditiveBlending,
+      blending: options.blending === undefined
+        ? THREE.AdditiveBlending
+        : options.blending,
       depthWrite: false,
       depthTest: true,
     });
@@ -431,6 +652,50 @@ function createRadialPressureGlow(options) {
     group.add(sprite);
   });
   return group;
+}
+
+function createRadialPressureIsosurface(options) {
+  const geometry = new THREE.SphereGeometry(options.radius, 96, 64);
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(options.color) },
+      uOpacity: { value: options.opacity },
+    },
+    vertexShader: `
+      varying vec3 vViewNormal;
+      varying vec3 vViewPosition;
+      void main() {
+        vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+        vViewPosition = viewPosition.xyz;
+        vViewNormal = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * viewPosition;
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uOpacity;
+      varying vec3 vViewNormal;
+      varying vec3 vViewPosition;
+      void main() {
+        vec3 viewDirection = normalize(-vViewPosition);
+        float rim = pow(1.0 - abs(dot(vViewNormal, viewDirection)), 2.15);
+        float alpha = uOpacity * (0.10 + 0.90 * rim);
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.NormalBlending,
+  });
+  const surface = new THREE.Mesh(geometry, material);
+  surface.name = options.name;
+  surface.position.copy(options.origin);
+  surface.renderOrder = 2;
+  surface.userData.pressureAtSurface = options.pressureAtSurface;
+  surface.userData.scientificMeaning =
+    "Radial-wind isobar evaluated at the analytic shock-apex distance";
+  return surface;
 }
 
 function sampleDiskRadius(random, innerRadius, outerRadius, pressureIndex) {
@@ -472,15 +737,16 @@ function createDiskPressureVolume(options) {
     * options.outerRadius
     * Math.pow(options.outerRadius / options.starRadius, options.scaleHeightExponent);
   const extent = halfHeight * 2.8;
-  const geometry = new THREE.PlaneGeometry(
-    options.outerRadius * 2,
-    options.outerRadius * 2,
-  );
   const vertexShader = `
-    varying vec2 vDiskPosition;
+    varying vec3 vDiskPosition;
+    varying vec3 vViewNormal;
+    varying vec3 vViewPosition;
     void main() {
-      vDiskPosition = position.xy;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      vDiskPosition = position;
+      vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
+      vViewPosition = viewPosition.xyz;
+      vViewNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * viewPosition;
     }
   `;
   const fragmentShader = `
@@ -493,55 +759,166 @@ function createDiskPressureVolume(options) {
     uniform float uPressureIndex;
     uniform float uPressureNormalization;
     uniform float uDisplayPressureMax;
-    uniform float uSliceHeight;
     uniform float uSliceOpacity;
-    varying vec2 vDiskPosition;
+    varying vec3 vDiskPosition;
+    varying vec3 vViewNormal;
+    varying vec3 vViewPosition;
 
     void main() {
-      float radius = length(vDiskPosition);
+      float radius = length(vDiskPosition.xy);
       if (radius < uInnerRadius || radius > uOuterRadius) discard;
       float scaleHeight = uScaleHeightRatio * radius
         * pow(radius / uStarRadius, uScaleHeightExponent);
-      float vertical = exp(-0.5 * pow(uSliceHeight / scaleHeight, 2.0));
+      float vertical = exp(-0.5 * pow(vDiskPosition.z / scaleHeight, 2.0));
       float pressure = uPressureNormalization
         * pow(uStarRadius / radius, uPressureIndex) * vertical;
       float normalizedPressure = clamp(pressure / uDisplayPressureMax, 1e-10, 1.0);
-      float pressureLight = 0.14 + 0.86 * pow(normalizedPressure, 0.12);
+      float pressureSignal = pow(normalizedPressure, 0.24);
+      float pressureLight = 0.34 + 1.10 * pressureSignal;
       float innerFade = smoothstep(uInnerRadius, uInnerRadius * 1.16, radius);
       float edgeFade = 1.0 - smoothstep(uOuterRadius * 0.70, uOuterRadius, radius);
-      float alpha = uSliceOpacity * innerFade * edgeFade * pow(vertical, 0.56);
+      float pressureOpacity = 0.42 + 0.58 * pressureSignal;
+      vec3 viewDirection = normalize(-vViewPosition);
+      float viewWeight = pow(abs(dot(vViewNormal, viewDirection)), 2.0);
+      float alpha = uSliceOpacity * pressureOpacity
+        * innerFade * edgeFade * pow(vertical, 0.56) * viewWeight;
       gl_FragColor = vec4(uColor * pressureLight, alpha);
     }
   `;
 
-  for (let index = 0; index < options.slices; index += 1) {
-    const fraction = options.slices === 1 ? 0.5 : index / (options.slices - 1);
-    const height = THREE.MathUtils.lerp(-extent, extent, fraction);
-    const material = new THREE.ShaderMaterial({
-      uniforms: {
-        uColor: { value: new THREE.Color(options.color) },
-        uInnerRadius: { value: options.innerRadius },
-        uOuterRadius: { value: options.outerRadius },
-        uStarRadius: { value: options.starRadius },
-        uScaleHeightRatio: { value: options.scaleHeightRatio },
-        uScaleHeightExponent: { value: options.scaleHeightExponent },
-        uPressureIndex: { value: options.pressureIndex },
-        uPressureNormalization: { value: options.pressureNormalization },
-        uDisplayPressureMax: { value: options.displayPressureMax },
-        uSliceHeight: { value: height },
-        uSliceOpacity: { value: options.opacity },
-      },
-      vertexShader,
-      fragmentShader,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
+  const sliceAxes = options.triplanar
+    ? ["x", "y", "z"]
+    : ["z"];
+  sliceAxes.forEach(function addSliceStack(axis) {
+    const limit = axis === "z" ? extent : options.outerRadius;
+    for (let index = 0; index < options.slices; index += 1) {
+      const fraction = options.slices === 1 ? 0.5 : index / (options.slices - 1);
+      const coordinate = THREE.MathUtils.lerp(-limit, limit, fraction);
+      let geometry;
+      if (axis === "z") {
+        geometry = new THREE.PlaneGeometry(
+          options.outerRadius * 2,
+          options.outerRadius * 2,
+        );
+        geometry.translate(0, 0, coordinate);
+      } else if (axis === "x") {
+        geometry = new THREE.PlaneGeometry(extent * 2, options.outerRadius * 2);
+        geometry.rotateY(Math.PI * 0.5);
+        geometry.translate(coordinate, 0, 0);
+      } else {
+        geometry = new THREE.PlaneGeometry(options.outerRadius * 2, extent * 2);
+        geometry.rotateX(Math.PI * 0.5);
+        geometry.translate(0, coordinate, 0);
+      }
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          uColor: { value: new THREE.Color(options.color) },
+          uInnerRadius: { value: options.innerRadius },
+          uOuterRadius: { value: options.outerRadius },
+          uStarRadius: { value: options.starRadius },
+          uScaleHeightRatio: { value: options.scaleHeightRatio },
+          uScaleHeightExponent: { value: options.scaleHeightExponent },
+          uPressureIndex: { value: options.pressureIndex },
+          uPressureNormalization: { value: options.pressureNormalization },
+          uDisplayPressureMax: { value: options.displayPressureMax },
+          uSliceOpacity: { value: options.opacity },
+        },
+        vertexShader,
+        fragmentShader,
+        transparent: true,
+        blending: options.blending === undefined
+          ? THREE.AdditiveBlending
+          : options.blending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const slice = new THREE.Mesh(geometry, material);
+      slice.name = "Decretion-disk " + axis + "-axis volume slice";
+      slice.frustumCulled = false;
+      slice.renderOrder = options.renderOrder || 0;
+      group.add(slice);
+    }
+  });
+
+  for (let index = 0; index < (options.contours || 0); index += 1) {
+    const fraction = index / Math.max(1, options.contours - 1);
+    const minimumContourRadius = Math.max(
+      options.innerRadius * 1.6,
+      options.outerRadius * 0.12,
+    );
+    const radius = minimumContourRadius * Math.pow(
+      options.outerRadius * 0.90 / minimumContourRadius,
+      fraction,
+    );
+    const scaleHeight = options.scaleHeightRatio
+      * radius
+      * Math.pow(radius / options.starRadius, options.scaleHeightExponent);
+    [-1, 0, 1].forEach(function addHeightContour(heightIndex) {
+      const contourPoints = [];
+      for (let segment = 0; segment < 192; segment += 1) {
+        const angle = segment / 192 * Math.PI * 2;
+        contourPoints.push(new THREE.Vector3(
+          radius * Math.cos(angle),
+          radius * Math.sin(angle),
+          heightIndex * scaleHeight,
+        ));
+      }
+      const contourGeometry = new THREE.BufferGeometry().setFromPoints(contourPoints);
+      const contourMaterial = new THREE.LineBasicMaterial({
+        color: options.color,
+        transparent: true,
+        opacity: THREE.MathUtils.lerp(
+          heightIndex === 0 ? 0.12 : 0.065,
+          heightIndex === 0 ? 0.03 : 0.018,
+          fraction,
+        ),
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const contour = new THREE.LineLoop(contourGeometry, contourMaterial);
+      contour.name = heightIndex === 0
+        ? "Decretion-disk midplane pressure contour"
+        : "Decretion-disk one-scale-height contour";
+      contour.renderOrder = (options.renderOrder || 0) + 1;
+      group.add(contour);
     });
-    const slice = new THREE.Mesh(geometry, material);
-    slice.position.z = height;
-    slice.frustumCulled = false;
-    group.add(slice);
+  }
+
+  for (let guide = 0; guide < (options.heightGuides || 0); guide += 1) {
+    const angle = guide / options.heightGuides * Math.PI * 2;
+    [-1, 1].forEach(function addScaleHeightGuide(side) {
+      const guidePoints = [];
+      for (let sample = 0; sample < 80; sample += 1) {
+        const fraction = sample / 79;
+        const radius = THREE.MathUtils.lerp(
+          Math.max(options.innerRadius * 1.6, options.outerRadius * 0.12),
+          options.outerRadius * 0.92,
+          fraction,
+        );
+        const scaleHeight = options.scaleHeightRatio
+          * radius
+          * Math.pow(radius / options.starRadius, options.scaleHeightExponent);
+        guidePoints.push(new THREE.Vector3(
+          radius * Math.cos(angle),
+          radius * Math.sin(angle),
+          side * scaleHeight,
+        ));
+      }
+      const guideGeometry = new THREE.BufferGeometry().setFromPoints(guidePoints);
+      const guideMaterial = new THREE.LineBasicMaterial({
+        color: options.color,
+        transparent: true,
+        opacity: 0.026,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        toneMapped: false,
+      });
+      const profile = new THREE.Line(guideGeometry, guideMaterial);
+      profile.name = "Decretion-disk flared scale-height guide";
+      profile.renderOrder = (options.renderOrder || 0) + 1;
+      group.add(profile);
+    });
   }
   return group;
 }
@@ -550,11 +927,27 @@ function createOrbitPath(pathCoordinates, options) {
   const points = pathCoordinates.map(function toVector(point) {
     return new THREE.Vector3().fromArray(point);
   });
-  // The metadata closes the orbit by repeating the first point. TubeGeometry
-  // closes the curve itself, so omit that duplicate when constructing it.
+  // The metadata closes the orbit by repeating the first point.
   const curvePoints = points.slice(0, -1);
   const curve = new THREE.CatmullRomCurve3(curvePoints, true, "centripetal");
   const group = new THREE.Group();
+
+  if (VIEW_PRESET === "paper") {
+    const sampledPoints = curve.getSpacedPoints(720);
+    const lineGeometry = new THREE.BufferGeometry().setFromPoints(sampledPoints);
+    const lineMaterial = new THREE.LineBasicMaterial({
+      color: options.coreColor,
+      transparent: true,
+      opacity: 0.68,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const line = new THREE.LineLoop(lineGeometry, lineMaterial);
+    line.name = "Thin barycentric orbit — paper reference";
+    group.add(line);
+    group.visible = false;
+    return group;
+  }
 
   const glowGeometry = new THREE.TubeGeometry(
     curve,
@@ -705,11 +1098,68 @@ function applyMetadata(metadata) {
     shock.field_min.toFixed(2) + "–" + shock.field_max.toFixed(2);
 }
 
+function applyViewPreset(name) {
+  const visibility = name === "paper"
+    ? {
+        shock: true,
+        pulsarBeam: false,
+        starOrbit: true,
+        pulsarOrbit: true,
+        apex: true,
+        barycenter: true,
+        coordinateAxes: true,
+        diskNormal: true,
+        lineOfSight: true,
+        stellarPressure: true,
+        diskPressure: true,
+        pulsarPressure: true,
+        stellarWind: false,
+        pulsarWind: false,
+        diskGas: false,
+        backgroundStars: false,
+      }
+    : {
+        shock: true,
+        pulsarBeam: false,
+        starOrbit: false,
+        pulsarOrbit: false,
+        apex: false,
+        barycenter: false,
+        coordinateAxes: false,
+        diskNormal: false,
+        lineOfSight: false,
+        stellarPressure: true,
+        diskPressure: true,
+        pulsarPressure: true,
+        stellarWind: true,
+        pulsarWind: true,
+        diskGas: true,
+        backgroundStars: true,
+      };
+
+  Object.entries(visibility).forEach(function setVisibility(entry) {
+    const layerName = entry[0];
+    const visible = entry[1];
+    if (layerObjects[layerName]) layerObjects[layerName].visible = visible;
+    (layerLabels[layerName] || []).forEach(function setLabelVisibility(label) {
+      label.visible = visible;
+    });
+    const input = document.querySelector(`[data-layer="${layerName}"]`);
+    if (input) input.checked = visible;
+  });
+
+  if (name === "paper") {
+    scene.background.set(0x000000);
+    scene.fog = null;
+    renderer.toneMappingExposure = 0.92;
+  }
+}
+
 function setCameraView(name, targets) {
   const views = {
     system: {
-      position: new THREE.Vector3(3.3, -2.7, 2.25),
-      target: new THREE.Vector3(0, 0.92, 0),
+      position: new THREE.Vector3(-2.2, -4.0, 3.58),
+      target: new THREE.Vector3(0, 0.52, 0),
     },
     star: {
       position: targets.star.clone().add(new THREE.Vector3(0.82, -0.72, 0.62)),
@@ -753,13 +1203,33 @@ function bindControls(targets) {
     input.addEventListener("change", function toggleLayer() {
       const object = layerObjects[input.dataset.layer];
       if (object) object.visible = input.checked;
+      (layerLabels[input.dataset.layer] || []).forEach(function toggleLabel(label) {
+        label.visible = input.checked;
+      });
     });
   });
+
+  function setPanelOpen(open) {
+    controlPanel.classList.toggle("is-open", open);
+    panelToggle.setAttribute("aria-expanded", String(open));
+    panelToggle.textContent = open ? "Close" : "Layers";
+  }
+
+  panelToggle.addEventListener("click", function togglePanel() {
+    setPanelOpen(!controlPanel.classList.contains("is-open"));
+  });
+  window.addEventListener("keydown", function closePanel(event) {
+    if (event.key === "Escape") setPanelOpen(false);
+  });
+  setPanelOpen(VIEW_PRESET !== "paper");
 }
 
-function updateLabel(elementId, point) {
+function updateLabel(elementId, point, layerName) {
   const element = document.getElementById(elementId);
-  if (!point) {
+  if (
+    !point
+    || (layerName && (!layerObjects[layerName] || !layerObjects[layerName].visible))
+  ) {
     element.hidden = true;
     return;
   }
@@ -767,8 +1237,18 @@ function updateLabel(elementId, point) {
   const visible = projected.z > -1 && projected.z < 1;
   element.hidden = !visible;
   if (!visible) return;
-  element.style.left = ((projected.x + 1) * 0.5 * window.innerWidth) + "px";
-  element.style.top = ((1 - projected.y) * 0.5 * window.innerHeight) + "px";
+  const targetX = (projected.x + 1) * 0.5 * window.innerWidth;
+  const targetY = (1 - projected.y) * 0.5 * window.innerHeight;
+  const offset = VIEW_PRESET === "paper"
+    ? (PAPER_LABEL_OFFSETS[elementId] || [14, -14])
+    : [0, 0];
+  const labelX = targetX + offset[0];
+  const labelY = targetY + offset[1];
+  element.style.left = labelX + "px";
+  element.style.top = labelY + "px";
+  if (VIEW_PRESET === "paper") {
+    element.dataset.anchor = offset[0] < 0 ? "right" : "left";
+  }
 }
 
 function resize() {
@@ -798,6 +1278,7 @@ async function loadScene() {
   const positions = physical.scene_positions;
   const flowModel = physical.flow_model;
   const beamModel = physical.pulsar_radio_beam_display;
+  const referenceGeometry = physical.reference_geometry;
   const display = metadata.visual_interpretation;
   const starPosition = new THREE.Vector3().fromArray(positions.be_star);
   const pulsarPosition = new THREE.Vector3().fromArray(positions.pulsar);
@@ -853,6 +1334,68 @@ async function loadScene() {
   scene.add(pulsarOrbit);
   layerObjects.pulsarOrbit = pulsarOrbit;
 
+  const apexPosition = new THREE.Vector3().fromArray(
+    referenceGeometry.apex.scene_coordinates,
+  );
+  const apexMarker = createReferenceMarker(apexPosition, {
+    name: "Shock apex — model reference marker",
+    color: "#ffe36e",
+    glyph: "crosshair",
+    size: 0.050,
+  });
+  scene.add(apexMarker);
+  layerObjects.apex = apexMarker;
+
+  const barycenterPosition = new THREE.Vector3().fromArray(
+    referenceGeometry.barycenter.scene_coordinates,
+  );
+  const barycenterMarker = createReferenceMarker(barycenterPosition, {
+    name: "Binary barycenter — orbit reference marker",
+    color: "#f1f4ff",
+    glyph: "cross",
+    size: 0.046,
+  });
+  scene.add(barycenterMarker);
+  layerObjects.barycenter = barycenterMarker;
+
+  const axesOrigin = new THREE.Vector3().fromArray(
+    referenceGeometry.coordinate_axes.origin_scene_coordinates,
+  );
+  const axes = createCoordinateAxes(axesOrigin, referenceGeometry);
+  scene.add(axes);
+  layerObjects.coordinateAxes = axes;
+
+  const diskNormalArrow = createVectorArrow(
+    starPosition,
+    new THREE.Vector3().fromArray(referenceGeometry.disk_normal.unit_vector),
+    {
+      name: "Decretion-disk normal — IBSEn OpticalStar.n_disk",
+      length: 0.50,
+      color: 0xffad43,
+      headLength: 0.052,
+      headWidth: 0.021,
+      opacity: 0.82,
+    },
+  );
+  scene.add(diskNormalArrow);
+  layerObjects.diskNormal = diskNormalArrow;
+
+  const lineOfSightArrow = createVectorArrow(
+    barycenterPosition,
+    new THREE.Vector3().fromArray(referenceGeometry.line_of_sight.unit_vector),
+    {
+      name: "Line of sight — IBSEn IBS3D.unit_los",
+      length: 0.72,
+      color: 0x59d4ff,
+      headLength: 0.055,
+      headWidth: 0.022,
+      opacity: 0.80,
+      dashed: VIEW_PRESET === "paper",
+    },
+  );
+  scene.add(lineOfSightArrow);
+  layerObjects.lineOfSight = lineOfSightArrow;
+
   const orbitPoints = orbitDisplay.be_star_path_scene_coordinates
     .concat(orbitDisplay.pulsar_path_scene_coordinates)
     .map(function toOrbitVector(point) {
@@ -901,8 +1444,25 @@ async function loadScene() {
     opacity: 0.68,
     color: 0xff9845,
   });
-  scene.add(stellarPressure);
-  layerObjects.stellarPressure = stellarPressure;
+  const stellarApexRadius = starPosition.distanceTo(apexPosition);
+  const stellarApexPressure = starWind.pressure_normalization_f_w * Math.pow(
+    starReferenceRadius / stellarApexRadius,
+    starWind.pressure_radial_power_law_index,
+  );
+  const paperStellarPressure = createRadialPressureIsosurface({
+    name: "Stellar-wind pressure isobar through shock apex",
+    origin: starPosition,
+    radius: stellarApexRadius,
+    pressureAtSurface: stellarApexPressure,
+    opacity: 0.18,
+    color: 0xc98f58,
+  });
+  scene.add(paperStellarPressure);
+  paperStellarPressure.visible = VIEW_PRESET === "paper";
+  if (VIEW_PRESET !== "paper") scene.add(stellarPressure);
+  layerObjects.stellarPressure = VIEW_PRESET === "paper"
+    ? paperStellarPressure
+    : stellarPressure;
 
   const pulsarPressure = createRadialPressureGlow({
     origin: pulsarPosition,
@@ -914,8 +1474,24 @@ async function loadScene() {
     opacity: 0.68,
     color: 0x55cfff,
   });
-  scene.add(pulsarPressure);
-  layerObjects.pulsarPressure = pulsarPressure;
+  const pulsarApexRadius = pulsarPosition.distanceTo(apexPosition);
+  const pulsarApexPressure = pulsarWindModel.pressure_normalization_f_p * Math.pow(
+    pulsarReferenceRadius / pulsarApexRadius,
+    pulsarWindModel.pressure_radial_power_law_index,
+  );
+  const paperPulsarPressure = createRadialPressureIsosurface({
+    name: "Pulsar-wind pressure isobar through shock apex",
+    origin: pulsarPosition,
+    radius: pulsarApexRadius,
+    pressureAtSurface: pulsarApexPressure,
+    opacity: 0.24,
+    color: 0x4f93b5,
+  });
+  if (VIEW_PRESET === "paper") scene.add(paperPulsarPressure);
+  if (VIEW_PRESET !== "paper") scene.add(pulsarPressure);
+  layerObjects.pulsarPressure = VIEW_PRESET === "paper"
+    ? paperPulsarPressure
+    : pulsarPressure;
 
   const diskPressure = createDiskPressureVolume({
     origin: starPosition,
@@ -929,9 +1505,14 @@ async function loadScene() {
     displayPressureMax: pressureDisplayMax,
     scaleHeightRatio: diskModel.scale_height_ratio_at_stellar_surface,
     scaleHeightExponent: diskModel.scale_height_exponent,
-    slices: 46,
-    opacity: 0.028,
-    color: 0xff4a28,
+    slices: VIEW_PRESET === "paper" ? 49 : 46,
+    opacity: VIEW_PRESET === "paper" ? 0.105 : 0.028,
+    color: VIEW_PRESET === "paper" ? 0xff5538 : 0xff4a28,
+    blending: THREE.AdditiveBlending,
+    renderOrder: VIEW_PRESET === "paper" ? 3 : 0,
+    contours: VIEW_PRESET === "paper" ? 3 : 0,
+    heightGuides: VIEW_PRESET === "paper" ? 4 : 0,
+    triplanar: VIEW_PRESET === "paper",
   });
   scene.add(diskPressure);
   layerObjects.diskPressure = diskPressure;
@@ -986,6 +1567,61 @@ async function loadScene() {
   addSystemLighting(starPosition, pulsarPosition);
   labelTargets.star = starPosition;
   labelTargets.pulsar = pulsarPosition;
+  labelTargets.apex = apexPosition;
+  labelTargets.barycenter = barycenterPosition;
+  labelTargets.xAxis = axes.userData.labelPositions.x;
+  labelTargets.yAxis = axes.userData.labelPositions.y;
+  labelTargets.diskNormal = diskNormalArrow.userData.labelPosition;
+  labelTargets.lineOfSight = lineOfSightArrow.userData.labelPosition;
+
+  if (VIEW_PRESET === "paper") {
+    createSceneLabel("Be star", starPosition, {
+      color: "#f3dfc9",
+      offset: new THREE.Vector3(0.18, -0.10, 0.10),
+    });
+    createSceneLabel("Pulsar", pulsarPosition, {
+      color: "#d9e8f4",
+      offset: new THREE.Vector3(-0.18, 0.03, 0.11),
+    });
+    createSceneLabel("Shock apex", apexPosition, {
+      color: "#f0d46b",
+      offset: new THREE.Vector3(-0.22, -0.08, -0.09),
+      layer: "apex",
+    });
+    createSceneLabel("Barycenter", barycenterPosition, {
+      color: "#e1e5eb",
+      offset: new THREE.Vector3(-0.21, -0.17, -0.12),
+      layer: "barycenter",
+    });
+    createSceneLabel("x", axes.userData.labelPositions.x, {
+      color: "#ef7777",
+      offset: new THREE.Vector3(0.07, 0, 0.055),
+      height: 0.15,
+      connector: false,
+      layer: "coordinateAxes",
+    });
+    createSceneLabel("y", axes.userData.labelPositions.y, {
+      color: "#71df88",
+      offset: new THREE.Vector3(0, 0.07, 0.065),
+      height: 0.15,
+      connector: false,
+      layer: "coordinateAxes",
+    });
+    createSceneLabel("n_disk", diskNormalArrow.userData.labelPosition, {
+      color: "#ffbd61",
+      offset: new THREE.Vector3(0.075, 0, 0.085),
+      height: 0.17,
+      connector: false,
+      layer: "diskNormal",
+    });
+    createSceneLabel("LOS", lineOfSightArrow.userData.labelPosition, {
+      color: "#79ddff",
+      offset: new THREE.Vector3(0.08, 0, 0.085),
+      height: 0.17,
+      connector: false,
+      layer: "lineOfSight",
+    });
+  }
 
   const targets = {
     star: starPosition,
@@ -997,25 +1633,39 @@ async function loadScene() {
     },
   };
   bindControls(targets);
+  applyViewPreset(VIEW_PRESET);
   setCameraView("system", targets);
-  setStatus("GLB + JSON + texture loaded", "ready");
+  setStatus(
+    VIEW_PRESET === "paper" ? "Loaded" : "GLB + JSON + texture loaded",
+    "ready",
+  );
 }
 
-addBackgroundStars();
+layerObjects.backgroundStars = addBackgroundStars();
 resize();
 window.addEventListener("resize", resize);
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(function renderFrame() {
   const deltaSeconds = Math.min(clock.getDelta(), 0.05);
-  animatedFlows.forEach(function update(flow) {
-    if (!flow.object.visible) return;
-    if (flow.type === "radial") updateRadialFlow(flow.object, deltaSeconds);
-    if (flow.type === "disk") updateDiskFlow(flow.object, deltaSeconds);
-  });
+  if (VIEW_PRESET !== "paper") {
+    animatedFlows.forEach(function update(flow) {
+      if (!flow.object.visible) return;
+      if (flow.type === "radial") updateRadialFlow(flow.object, deltaSeconds);
+      if (flow.type === "disk") updateDiskFlow(flow.object, deltaSeconds);
+    });
+  }
   controls.update();
-  updateLabel("star-label", labelTargets.star);
-  updateLabel("pulsar-label", labelTargets.pulsar);
+  if (VIEW_PRESET !== "paper") {
+    updateLabel("star-label", labelTargets.star);
+    updateLabel("pulsar-label", labelTargets.pulsar);
+    updateLabel("apex-label", labelTargets.apex, "apex");
+    updateLabel("barycenter-label", labelTargets.barycenter, "barycenter");
+    updateLabel("x-axis-label", labelTargets.xAxis, "coordinateAxes");
+    updateLabel("y-axis-label", labelTargets.yAxis, "coordinateAxes");
+    updateLabel("disk-normal-label", labelTargets.diskNormal, "diskNormal");
+    updateLabel("los-label", labelTargets.lineOfSight, "lineOfSight");
+  }
   renderer.render(scene, camera);
 });
 
