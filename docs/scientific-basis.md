@@ -13,7 +13,7 @@ simulation.
 - Shock geometry: barycentric `IBS3D.r_vec`
 - Surface color: Doppler factor `IBS3D.dopl` toward the model line of sight
 - Coordinate unit: instantaneous star–pulsar separation
-- Shock arclength cutoff: `s_max = 2`
+- Shock arclength cutoff: `s_max = 1`
 
 The shock is the axisymmetric surface of revolution calculated by IBSEn. No
 turbulence, clumps, or non-axisymmetric instabilities are added to the exported
@@ -34,8 +34,9 @@ is neither an observed neutron-star surface map nor an IBSEn output. The bodies
 have no extended halo meshes or large
 glow sprites. A compact, smoothly fading white glow remains immediately around
 the pulsar surface; it and the low-intensity point lights are visibility cues,
-not physical fields. Shock transparency is mapped from the normalized Doppler
-factor and is not physical opacity.
+not physical fields. Shock color is mapped from the normalized Doppler factor.
+Its comparatively high, weakly field-dependent opacity is a legibility choice
+and is not physical opacity.
 
 The browser distinguishes static pressure fields from flow tracers. The
 stellar and pulsar wind fields use the model's radial inverse-square pressure

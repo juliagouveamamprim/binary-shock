@@ -43,6 +43,7 @@ class ViewerContractTests(unittest.TestCase):
     def test_metadata_supplies_flow_model(self) -> None:
         metadata = json.loads(METADATA_PATH.read_text(encoding="utf-8"))
         physical = metadata["physical_model"]
+        self.assertEqual(physical["shock_arclength_cutoff_s_max"], 1.0)
         flows = physical["flow_model"]
 
         self.assertEqual(

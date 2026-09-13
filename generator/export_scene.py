@@ -77,7 +77,7 @@ def _rgba_from_doppler(normalized: np.ndarray) -> np.ndarray:
     rgba = matplotlib.colormaps["plasma"](normalized)
     # Preserve structure in faint regions while letting boosted regions read as
     # a luminous rim. Alpha is a display mapping, not a physical opacity.
-    rgba[..., 3] = 0.34 + 0.58 * np.power(normalized, 0.65)
+    rgba[..., 3] = 0.56 + 0.40 * np.power(normalized, 0.65)
     return np.rint(rgba * 255.0).astype(np.uint8)
 
 
@@ -86,7 +86,7 @@ def calculate_scene(
     system: str = "psrb",
     days_after_periastron: float = 20.0,
     disk_strength: float = 100.0,
-    s_max: float = 2.0,
+    s_max: float = 1.0,
     n_theta: int = 121,
     n_phi: int = 160,
 ) -> tuple[SceneData, dict[str, float]]:
@@ -850,7 +850,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--system", default="psrb", help="IBSEn system preset (default: psrb)")
     parser.add_argument("--days-after-periastron", type=float, default=20.0)
     parser.add_argument("--disk-strength", type=float, default=100.0)
-    parser.add_argument("--s-max", type=float, default=2.0)
+    parser.add_argument("--s-max", type=float, default=1.0)
     parser.add_argument("--n-theta", type=int, default=121)
     parser.add_argument("--n-phi", type=int, default=160)
     parser.add_argument(

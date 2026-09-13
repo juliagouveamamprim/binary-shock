@@ -14,7 +14,7 @@
     "effective_wind_momentum_ratio_beta": 0.035321971059500246,
     "shock_opening_angle_radians": 2.4833832541305156,
     "disk_pressure_strength_f_d": 100.0,
-    "shock_arclength_cutoff_s_max": 2.0,
+    "shock_arclength_cutoff_s_max": 1.0,
     "coordinate_origin": "Binary barycenter",
     "coordinate_unit": "instantaneous star-pulsar separation",
     "scene_positions": {
@@ -3835,12 +3835,12 @@
     "vertices": 19360,
     "triangles": 38400,
     "color_field": "Doppler factor toward the IBSEn line of sight",
-    "field_min": 0.3923924987251058,
-    "field_max": 1.9211594264889154,
+    "field_min": 0.528944614609982,
+    "field_max": 1.8889936412162927,
     "display_normalization": {
       "method": "linear clipping between percentiles 2 and 98",
-      "percentile_02": 0.42669876119936795,
-      "percentile_98": 1.8848011445596429
+      "percentile_02": 0.5632649042569481,
+      "percentile_98": 1.8114688748639964
     },
     "colormap": "matplotlib plasma"
   },

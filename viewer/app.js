@@ -172,17 +172,18 @@ function prepareModel(root) {
     const sourceWasArray = Array.isArray(object.material);
     const materials = sourceWasArray ? object.material : [object.material];
     const preparedMaterials = materials.map(function prepareMaterial(source) {
-      const material = source.clone();
       if (name.includes("shock")) {
-        material.transparent = true;
-        material.opacity = VIEW_PRESET === "paper" ? 0.56 : 0.68;
-        material.depthWrite = false;
-        material.side = THREE.DoubleSide;
-        material.vertexColors = true;
-        if (material.emissive) {
-          material.emissive.multiplyScalar(VIEW_PRESET === "paper" ? 0.72 : 1.35);
-        }
-      } else if (name.includes("disk")) {
+        return new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: VIEW_PRESET === "paper" ? 0.82 : 0.76,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          toneMapped: false,
+        });
+      }
+      const material = source.clone();
+      if (name.includes("disk")) {
         material.transparent = true;
         material.opacity = 0.52;
         material.depthWrite = false;
