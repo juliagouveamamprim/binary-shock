@@ -1,6 +1,6 @@
 {
   "title": "Binary Shock — PSR B1259−63 prototype",
-  "scene_version": "0.2.0",
+  "scene_version": "0.3.0",
   "classification": "Scientific visualization derived from an analytic axisymmetric model",
   "physical_model": {
     "software": "IBSEn",
@@ -3819,6 +3819,16 @@
         "pulsar_radius_in_disk_plane_separation_units": 0.9984402104712807,
         "scale_height_at_pulsar_radius_separation_units": 0.06445766468977197
       }
+    },
+    "pressure_balance_reference": {
+      "classification": "viewer reference tied to analytic pressure balance",
+      "quantity": "dimensionless IBSEn pressure",
+      "stellar_external_field": "P_polar + P_decretion_disk",
+      "pulsar_field": "P_pulsar_wind",
+      "apex_external_pressure": 0.002292868875457807,
+      "apex_pulsar_pressure": 0.0022928688754578082,
+      "apex_relative_mismatch": 5.674300091507986e-16,
+      "representation_note": "Both reference surfaces extend from their source body to the analytic apex. The Be-side sphere is a geometric extent reference, not an exact isosurface of the anisotropic summed external field; disk pressure is displayed separately"
     }
   },
   "shock_surface": {
@@ -3850,7 +3860,7 @@
     "pulsar_radio_beam": "Optional antipodal radio-beam layer aligned with a model-informed magnetic axis. Its orientation uses the IBSEn line of sight and published radio-polarization angles; its laminar sheet geometry, unmeasured sky azimuth, and frozen rotational phase are documented visual choices",
     "star_orbit": "Model-derived barycentric path in the native IBSEn coordinate frame",
     "pulsar_orbit": "Model-derived barycentric path shown in the same native frame and physical scale as the Be-star orbit",
-    "pressure_fields": "Smooth browser volumes use the IBSEn pressure laws with contrast compression; both winds share one monotonic brightness mapping and spatial display window; brightness and opacity are display mappings, not gas density or physical opacity",
+    "pressure_fields": "The paper preset uses two geometric pressure-balance reference surfaces that reach the analytic apex and displays decretion-disk pressure as a separate volume; surface opacity is a display choice",
     "disk_geometry": "Diffuse browser volume sampled from the IBSEn radial pressure and vertical scale-height laws; no hard disk surface is stored in the GLB",
     "disk_extent": "IBSEn supplies no hard outer edge; the display radius is 1.35 times the pulsar's projected disk-plane radius and fades smoothly at the edge",
     "turbulence": "None added; the exported shock retains the axisymmetric IBSEn geometry"

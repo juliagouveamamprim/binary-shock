@@ -351,6 +351,19 @@ def build_metadata(
     first_ring_apex_offset = float(
         np.max(np.linalg.norm(apex_ring_scene - apex_scene, axis=1))
     )
+    apex_physical = apex_scene * data.separation_cm
+    apex_from_star = apex_physical - star_barycentric_now
+    apex_from_pulsar = apex_physical - np.asarray(
+        data.orbit.vector_p(data.time_seconds), dtype=float
+    )
+    true_anomaly = data.orbit.true_an(data.time_seconds)
+    apex_external_pressure = float(
+        data.star.polar_wind_pressure(np.linalg.norm(apex_from_star))
+        + data.star.decr_disk_pressure(apex_from_star, true_an=true_anomaly)
+    )
+    apex_pulsar_pressure = float(
+        data.pulsar.wind_pressure(np.linalg.norm(apex_from_pulsar))
+    )
     pulsar_axes = _model_informed_pulsar_axes(data.shock.unit_los)
     closest_approach_deg = float(
         np.rad2deg(
@@ -368,7 +381,7 @@ def build_metadata(
     )
     return {
         "title": "Binary Shock — PSR B1259−63 prototype",
-        "scene_version": "0.2.0",
+        "scene_version": "0.3.0",
         "classification": "Scientific visualization derived from an analytic axisymmetric model",
         "physical_model": {
             "software": "IBSEn",
@@ -569,6 +582,24 @@ def build_metadata(
                     ],
                 },
             },
+            "pressure_balance_reference": {
+                "classification": "viewer reference tied to analytic pressure balance",
+                "quantity": "dimensionless IBSEn pressure",
+                "stellar_external_field": "P_polar + P_decretion_disk",
+                "pulsar_field": "P_pulsar_wind",
+                "apex_external_pressure": apex_external_pressure,
+                "apex_pulsar_pressure": apex_pulsar_pressure,
+                "apex_relative_mismatch": float(
+                    abs(apex_external_pressure - apex_pulsar_pressure)
+                    / apex_pulsar_pressure
+                ),
+                "representation_note": (
+                    "Both reference surfaces extend from their source body to the analytic "
+                    "apex. The Be-side sphere is a geometric extent reference, not an exact "
+                    "isosurface of the anisotropic summed external field; disk pressure is "
+                    "displayed separately"
+                ),
+            },
         },
         "shock_surface": {
             "vertices": int(len(data.shock_vertices)),
@@ -611,9 +642,9 @@ def build_metadata(
                 "physical scale as the Be-star orbit"
             ),
             "pressure_fields": (
-                "Smooth browser volumes use the IBSEn pressure laws with contrast compression; "
-                "both winds share one monotonic brightness mapping and spatial display window; "
-                "brightness and opacity are display mappings, not gas density or physical opacity"
+                "The paper preset uses two geometric pressure-balance reference surfaces "
+                "that reach the analytic apex and displays decretion-disk pressure as a "
+                "separate volume; surface opacity is a display choice"
             ),
             "disk_geometry": (
                 "Diffuse browser volume sampled from the IBSEn radial pressure and vertical "

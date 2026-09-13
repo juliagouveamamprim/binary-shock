@@ -138,6 +138,17 @@ class ViewerContractTests(unittest.TestCase):
             abs(disk["pulsar_height_from_disk_plane_separation_units"]),
             disk["scale_height_at_pulsar_radius_separation_units"],
         )
+        pressure_display = physical["pressure_balance_reference"]
+        self.assertEqual(
+            pressure_display["stellar_external_field"],
+            "P_polar + P_decretion_disk",
+        )
+        self.assertAlmostEqual(
+            pressure_display["apex_external_pressure"],
+            pressure_display["apex_pulsar_pressure"],
+            places=12,
+        )
+        self.assertLess(pressure_display["apex_relative_mismatch"], 1e-12)
 
 
 if __name__ == "__main__":

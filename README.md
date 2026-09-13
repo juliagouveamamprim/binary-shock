@@ -33,8 +33,8 @@ loads the generated GLB and JSON files with a static presentation: Be star,
 textured neutron star, analytic shock, pressure fields, both barycentric orbits,
 the shock apex, the barycenter, the exported `x`–`y` axes, the decretion-disk
 normal, and the IBSEn line of sight. No particle or flow-tracer layer appears in
-the paper preset. Its radial-wind pressure layers are provisional isobaric
-reference shells drawn through the analytic shock apex.
+the paper preset. Its two pressure-balance reference surfaces reach the analytic
+shock apex, while decretion-disk pressure remains visible as a separate volume.
 
 Open `http://localhost:8000/viewer/?preset=artistic` to retain the earlier
 cinematic defaults while the two presentations are developed together.

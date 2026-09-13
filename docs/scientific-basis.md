@@ -53,43 +53,27 @@ relative brightness is calculated from the IBSEn normalizations and
 inverse-square laws. The common outer fade is only a viewing limit: neither
 analytic wind has a hard physical edge there.
 
-The paper-reference preset instead uses one thin isobaric shell for each radial
-wind. Each shell radius is the model distance from its source body to the
-analytic shock apex: about 0.842 instantaneous separations for the stellar wind
-and 0.158 for the pulsar wind in the current scene. Because both winds are
-isotropic and their pressure laws are monotonic in radius, each sphere is a
-surface of constant pressure for that wind and passes through the apex. The two
-spheres therefore touch there and make the geometric pressure-balance location
-easy to read. This is a viewer-derived reference construction, not an
-additional IBSEn shock surface. The two shell values must not be interpreted as
-equal contributions by themselves: the effective balance can also include the
-decretion-disk pressure. Shell opacity and limb emphasis are display choices,
-and this pressure representation is explicitly provisional.
+The paper-reference preset uses one pressure-balance reference surface on each
+side of the binary. Both surfaces extend from their source body to the analytic
+shock apex. The cool pulsar sphere is an isobar of its isotropic inverse-square
+wind. The warm Be-side sphere is a deliberately simple geometric extent
+reference: because the true external balance contains
+`P_external = P_polar + P_decretion_disk`, it must not be interpreted as an exact
+isosurface of that anisotropic sum. The disk pressure therefore remains visible
+as its own filled volume instead of being hidden inside the warm sphere.
 
-IBSEn does not prescribe a hard outer edge for this disk model. The viewer
-therefore extends the visible volume beyond the pulsar's projected radius in the
-disk plane and fades it smoothly. At the selected epoch the pulsar lies within
-one model scale height of the disk midplane, so the overlap is physically
-meaningful even though its visual strength is deliberately enhanced.
+At the apex, IBSEn solves `P_external - P_pulsar = 0`; the exported values agree
+to numerical precision and are recorded under
+`physical_model.pressure_balance_reference` in the JSON sidecar. Surface color,
+opacity, and limb emphasis are diagrammatic choices and do not encode pressure
+magnitude. A future version may replace the Be-side reference sphere with the
+actual implicit isosurface of the summed external field.
 
-In the paper-reference preset, four faint radial contour sets accompany the
-filled disk-pressure volume. The fill is the primary representation: its color
-intensity and opacity increase monotonically with the analytic pressure after a
-documented contrast compression, while the radial cutoff and vertical Gaussian
-profile make it fade smoothly. The browser samples that same scalar function
-with three orthogonal slice stacks and weights their projected contribution by
-viewing angle. This triplanar display prevents a stack of disk-parallel slices
-from disappearing when viewed edge-on; it changes the sampling method, not the
-pressure function. Because the analytic midplane pressure depends
-only on radius and decreases monotonically, every midplane circle is an
-isobar. Companion rings at `z = +H(r)` and `z = -H(r)` mark one local model
-scale height, where the Gaussian vertical-pressure factor is
-`exp(-1/2)`. Sparse radial guide curves connect those rings and expose the
-model's flaring scale height in three dimensions. These deliberately subdued
-lines are sampling guides,
-not upper and lower physical boundaries: the Gaussian disk has no hard vertical
-surface. Their logarithmic radial spacing and opacity are diagrammatic choices
-that avoid moving particles and a false hard outer edge.
+IBSEn does not prescribe a hard outer edge for the disk model. The visible disk
+volume therefore uses a smooth radial fade. Its orientation, radial power law,
+flaring scale height, and Gaussian vertical profile come from IBSEn. Triplanar
+sampling keeps the filled disk legible when it is viewed edge-on; this changes
+the display sampling, not the analytic pressure law.
 
 The optional stellar and pulsar orbits are sampled directly from
 `IBSEn Orbit.vector_s` and `Orbit.vector_p`, their barycentric Keplerian
@@ -101,7 +85,8 @@ physical relative scale are preserved.
 
 The paper-reference preset is a static, lower-decoration view of the same GLB
 and JSON scene. Its first version displays only the Be star, the textured
-display-scale neutron star, the three pressure fields, the analytic shock, both
+display-scale neutron star, the pressure-balance reference surfaces, the
+decretion-disk pressure volume, the analytic shock, both
 orbits, and explicit geometric annotations. Stellar-wind, pulsar-wind, and
 Keplerian-disk particle tracers are all excluded, as is the radio beam.
 

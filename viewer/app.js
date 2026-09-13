@@ -1277,6 +1277,7 @@ async function loadScene() {
   const physical = metadata.physical_model;
   const positions = physical.scene_positions;
   const flowModel = physical.flow_model;
+  const pressureBalanceReference = physical.pressure_balance_reference;
   const beamModel = physical.pulsar_radio_beam_display;
   const referenceGeometry = physical.reference_geometry;
   const display = metadata.visual_interpretation;
@@ -1445,20 +1446,15 @@ async function loadScene() {
     color: 0xff9845,
   });
   const stellarApexRadius = starPosition.distanceTo(apexPosition);
-  const stellarApexPressure = starWind.pressure_normalization_f_w * Math.pow(
-    starReferenceRadius / stellarApexRadius,
-    starWind.pressure_radial_power_law_index,
-  );
   const paperStellarPressure = createRadialPressureIsosurface({
-    name: "Stellar-wind pressure isobar through shock apex",
+    name: "Be-side pressure-balance reference through shock apex",
     origin: starPosition,
     radius: stellarApexRadius,
-    pressureAtSurface: stellarApexPressure,
-    opacity: 0.18,
+    pressureAtSurface: pressureBalanceReference.apex_external_pressure,
+    opacity: 0.30,
     color: 0xc98f58,
   });
-  scene.add(paperStellarPressure);
-  paperStellarPressure.visible = VIEW_PRESET === "paper";
+  if (VIEW_PRESET === "paper") scene.add(paperStellarPressure);
   if (VIEW_PRESET !== "paper") scene.add(stellarPressure);
   layerObjects.stellarPressure = VIEW_PRESET === "paper"
     ? paperStellarPressure
@@ -1475,16 +1471,12 @@ async function loadScene() {
     color: 0x55cfff,
   });
   const pulsarApexRadius = pulsarPosition.distanceTo(apexPosition);
-  const pulsarApexPressure = pulsarWindModel.pressure_normalization_f_p * Math.pow(
-    pulsarReferenceRadius / pulsarApexRadius,
-    pulsarWindModel.pressure_radial_power_law_index,
-  );
   const paperPulsarPressure = createRadialPressureIsosurface({
     name: "Pulsar-wind pressure isobar through shock apex",
     origin: pulsarPosition,
     radius: pulsarApexRadius,
-    pressureAtSurface: pulsarApexPressure,
-    opacity: 0.24,
+    pressureAtSurface: pressureBalanceReference.apex_pulsar_pressure,
+    opacity: 0.36,
     color: 0x4f93b5,
   });
   if (VIEW_PRESET === "paper") scene.add(paperPulsarPressure);
