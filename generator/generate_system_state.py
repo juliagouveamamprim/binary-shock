@@ -94,7 +94,11 @@ def _shock_reference_geometry(data: SceneData) -> dict:
             "unit": "instantaneous star-pulsar separation",
             "sample_values": np.asarray(arclength[phi_index], dtype=float).tolist(),
             "meridian_scene_coordinates": _path(grid[phi_index]),
+            "opposite_meridian_scene_coordinates": _path(
+                grid[(phi_index + data.shock.n_phi // 2) % data.shock.n_phi]
+            ),
         },
+        "terminal_ring_scene_coordinates": _path(grid[:, -1]),
         "reference_surface_point": {
             "scene_coordinates": _vector(point),
             "arclength_s": float(arclength[phi_index, s_index]),
@@ -409,7 +413,7 @@ def generate(args: argparse.Namespace) -> tuple[Path, Path]:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--system", default="psrb")
-    parser.add_argument("--days-after-periastron", type=float, default=20.0)
+    parser.add_argument("--days-after-periastron", type=float, default=100.0)
     parser.add_argument("--disk-strength", type=float, default=100.0)
     parser.add_argument("--s-max", type=float, default=1.0)
     parser.add_argument("--n-theta", type=int, default=121)

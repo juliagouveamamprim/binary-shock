@@ -13,7 +13,7 @@ artistic layers are not the scientific product documented here.
 
 ## Representative model state
 
-The first implementation uses the IBSEn `psrb` preset at 20 days after
+The first implementation uses the IBSEn `psrb` preset at 100 days after
 periastron, with `f_d = 100` and the shock cropped at `s = 1`. This is a
 scientifically calculated representative realization selected as a starting
 point for a composition similar to the hand-drawn schematic. The schematic
