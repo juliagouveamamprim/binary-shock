@@ -5,7 +5,7 @@ shock models implemented by [IBSEn](https://github.com/juliagouveamamprim/IBSEn)
 
 ## Current branch
 
-`codex/paper-figure-3d` develops a static three-dimensional explanatory figure
+`paper-figure-3d` develops a static three-dimensional explanatory figure
 for an intrabinary-shock paper. It will translate a schematic model geometry
 into a clear spatial composition with a fixed camera.
 
