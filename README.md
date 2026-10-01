@@ -25,6 +25,13 @@ presentations:
 Implementation and rendering instructions will be added as the new figure is
 built.
 
+## Generate the shared system state
+
+Run `python generator/generate_system_state.py` in the installed Python 3.12
+environment. It writes a presentation-neutral scientific state to
+`public/data/representative-system-state.json` and the analytic shock mesh to
+`public/models/representative-shock.glb`.
+
 ## Scientific scope
 
 See [docs/scientific-basis.md](docs/scientific-basis.md) for the current scope

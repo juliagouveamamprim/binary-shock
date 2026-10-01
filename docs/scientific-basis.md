@@ -11,6 +11,21 @@ It is **not**, at this stage, a direct export of one particular IBSEn epoch or
 a hydrodynamic simulation. The earlier interactive Three.js scene and its
 artistic layers are not the scientific product documented here.
 
+## Representative model state
+
+The first implementation uses the IBSEn `psrb` preset at 20 days after
+periastron, with `f_d = 100` and the shock cropped at `s = 1`. This is a
+scientifically calculated representative realization selected as a starting
+point for a composition similar to the hand-drawn schematic. The schematic
+does not determine this preset or epoch, and the figure must not imply that it
+does.
+
+`generator/generate_system_state.py` exports the model state independently of
+any renderer. Its JSON contains the barycentric bodies and orbit, disk model,
+winds, shock apex and reference geometry, and the vectors and coordinates
+needed by the paper annotations. Its companion GLB contains only the analytic
+shock mesh, without a presentation-specific material.
+
 ## Intended content
 
 The planned figure will show, in a fixed camera view:
